@@ -1,13 +1,13 @@
 # Security Policy
 
-## Supported Versions
+## Supported versions
 
 | Version | Supported |
 |---|---|
 | `main` (latest) | ✅ |
-| All prior tags | ❌ (portfolio project — no backports) |
+| All prior tags | ❌ — portfolio project, no backports |
 
-## Reporting a Vulnerability
+## Reporting a vulnerability
 
 **Do not open a public GitHub issue for security vulnerabilities.**
 
@@ -19,76 +19,142 @@ Include:
 - Impact assessment (which tenants, which data, what operations)
 - Any proof-of-concept code (responsible disclosure only)
 
-You will receive an acknowledgement within **48 hours** and a resolution timeline within **7 days**.
+Acknowledgement within 48 hours, resolution timeline within 7 days.
 
-## Security Architecture
+---
 
-### Tenant Isolation (RLS)
+## Security architecture
 
-Every table in the Supabase schema has **Row-Level Security enabled by default**. The RLS posture is **deny by default** — no policy means no access.
+### Tenant isolation (RLS)
 
-All cross-tenant access is provably denied via pgTAP tests in `tests/rls/`. Three tenant scenarios are tested:
-- Tenant A cannot read Tenant B's workflows
-- Tenant A cannot read Tenant B's execution events
-- Tenant A cannot insert into Tenant B's audit log
-- Service role is the only principal that can write to `audit_events`
+Every table has `ENABLE` and `FORCE ROW LEVEL SECURITY`. Posture is **deny by default** — no policy means no access.
 
-### Webhook Integrity
+Policies use the `is_organization_member(uuid)` SECURITY DEFINER helper, which performs an `EXISTS (SELECT 1 FROM organization_members WHERE user_id = auth.uid() AND organization_id = target_org)` check. This pattern was a Gemini Phase 0 audit HIGH constraint — it replaces the more common scalar `app_metadata.org_id` JWT claim, which would otherwise let up-to-1-hour-stale tokens retain access after a user was evicted from an org.
 
-All inbound webhooks (n8n, Stripe) are verified before any processing:
+**pgTAP coverage** (`supabase/tests/rls/`):
 
-1. **Signature verification** — HMAC-SHA256 (n8n) or Stripe-Signature header (Stripe)
-2. **Replay protection** — 5-minute window enforced via `webhook_inbox.received_at` timestamp
-3. **Idempotency** — duplicate event IDs silently ignored (upsert-or-skip pattern)
-4. **Raw body preservation** — all webhook routes use `runtime: "nodejs"` to prevent body parsing before signature verification
+- `cross-tenant-denial.test.sql` — 34 assertions across 3 tenants covering `organizations`, `organization_members`, `organization_invites`, `workflows`, `workflow_versions`, `executions`, `execution_events`, `webhook_inbox`, `billing_subscriptions`, `webhook_events`, `audit_events`. Cross-tenant reads return 0 rows; cross-tenant writes raise SQLSTATE 42501.
+- `append-only-audit.test.sql` — 11 assertions proving `UPDATE`, `DELETE`, `TRUNCATE`, `INSERT ... ON CONFLICT DO UPDATE`, and `MERGE ... WHEN MATCHED THEN UPDATE/DELETE` all raise SQLSTATE 42501 with the audit-trigger's exact error message.
 
-### Audit Log Integrity
+### Privilege escalation defenses (Codex adversarial fixes)
 
-`audit_events` is append-only at the database level. A PostgreSQL trigger blocks `UPDATE` and `DELETE` operations on this table — no application code can override this. Log entries include:
-- Actor (user ID + org ID)
-- Action type (enum — no free-text injection)
-- Target resource (table + row ID)
-- Timestamp (DB-generated, not client-supplied)
-- Previous state (JSON snapshot for mutations)
+The Phase 2 Codex gate found four privilege paths that the initial schema permitted. All were fixed before Phase 2 closed:
 
-### Transport Security
+- **Admin → owner self-promotion** (CRITICAL) — `organization_members` UPDATE policy split: admins manage non-owner rows only; owner transitions require the actor to already hold `owner`.
+- **Last owner orphaning** (HIGH) — `BEFORE DELETE` and `BEFORE UPDATE` triggers reject the final owner's removal or demotion (SQLSTATE 23001).
+- **Cross-tenant `workflow_versions`** (HIGH) — Composite FK `(workflow_id, organization_id) → workflows(id, organization_id)` rejects rows whose two tenant references disagree.
+- **Audit diff leak to all members** (HIGH) — SELECT policy tightened to `has_organization_role(...,'admin')`. Phase 5+ redacted member-safe feed is tracked.
 
-- **TLS 1.2+** enforced on all connections
-- **HSTS** header with `max-age=63072000; includeSubDomains; preload`
-- **SameSite=Strict** on all auth cookies
-- **Content-Security-Policy** — strict, no `unsafe-inline` or `unsafe-eval`
+Full gate report: [`docs/phase-2-council-gate.md`](./docs/phase-2-council-gate.md).
 
-### Secrets Management
+### Webhook integrity
 
-- No secrets are committed to this repository under any circumstances
-- `.env.example` documents all required variables; no values
-- `gitleaks` runs in CI on every push and pull request
-- `STRIPE_SECRET_KEY` and `SUPABASE_SERVICE_ROLE_KEY` files are in CODEOWNERS — any PR touching them requires explicit review
+Both `/api/webhooks/n8n` and `/api/webhooks/stripe` follow the same pipeline:
 
-### Input Validation
+1. **Size guard.** Content-Length and raw-body length both capped (5 MB n8n, 1 MB Stripe) before any parsing.
+2. **Required headers.** Signature header and (n8n only) idempotency key must be present and well-formed.
+3. **HMAC-SHA256 verification.** `timingSafeEqual` from Node `crypto`. Header format is `t=<unix_ts>,v1=<64 hex>` — identical to Stripe's own convention.
+4. **Replay window.** Timestamp must be within ±300s of now; stale = reject.
+5. **Shape validation.** JSON body must be a non-null, non-array object (Stripe also requires `id:string` + `type:string`).
+6. **Idempotency dedup.** Live mode: UNIQUE on `(source, lower(idempotency_key))` (n8n) or `(provider, event_id)` (Stripe). Fixture synthesizes duplicates via well-known prefixes for tests.
+7. **No oracle.** All auth failures return an identical `{received:false, error:"unauthorized"}` shape with status 401 — the response never reveals which control tripped (bad signature / stale timestamp / wrong secret).
 
-Every server action and API route handler validates input with **Zod** before processing. No raw user input reaches the database layer. SQL injection is structurally prevented by Supabase's parameterized query API.
+Vitest coverage: `src/tests/webhooks/` — 41 assertions (n8n-signature: 12, n8n-route: 15, stripe-route: 14).
 
-## Threat Model
+### Audit log integrity
 
-Full STRIDE analysis: [`docs/threat-model.md`](docs/threat-model.md)
+`audit_events` is append-only at the trigger layer:
 
-## Dependency Scanning
+- `BEFORE UPDATE` trigger → raise `insufficient_privilege` (42501)
+- `BEFORE DELETE` trigger → raise `insufficient_privilege` (42501)
+- `BEFORE TRUNCATE` trigger → raise `insufficient_privilege` (42501) — Gemini HIGH addition; naive patterns only protect UPDATE + DELETE
 
-- **Dependabot** — weekly dependency updates with auto-merge for patch versions
-- **`pnpm audit --audit-level=high`** — fails CI on HIGH or CRITICAL vulnerabilities
-- **Snyk** — runs on pull requests (optional; enable via repository settings)
+Plus `REVOKE update, delete, truncate ON audit_events FROM public, authenticated, anon` as belt-and-braces against grant-table bypasses.
+
+**Documented DBA-tier caveat.** A Postgres DBA with table ownership can still `ALTER TABLE audit_events DISABLE TRIGGER ALL` or `SET session_replication_role = replica`. True tamper-evident audit requires ownership lockdown (migrator role only) + WAL archiving + offline hash-chain verification — tracked for Phase 8+ ops doc.
+
+**App-layer diff redaction.** `emitAuditEvent()` recursively redacts fields whose keys match `/token|password|secret|key|api.?key|authorization/i` before persisting, as defense in depth against callers that forget to strip sensitive data.
+
+### Session handling
+
+- Edge proxy (`src/proxy.ts`) matches session cookies against two patterns: `sb-<ref>-auth-token` (Supabase SSR) and the legacy `sb-access-token`. Any other `sb-*` cookie (e.g., locale) is rejected — no prefix abuse.
+- No header-smuggling path: the proxy checks only `request.cookies`, never any other header value.
+- Fixture mode auto-issues a session via `FixtureAuthAdapter`; the proxy passes through.
+- `requireSession()` in server components redirects unauthenticated users to `/auth/sign-in?redirect=<path>`.
+
+Vitest coverage: `src/tests/auth/bypass-attempt.test.ts` — 22 assertions covering protected-path redirects, cookie spec strictness, public-path allowance, fixture bypass.
+
+### Plan + role gates
+
+Features are gated at three layers:
+
+1. **Database.** RLS policies grant access based on role (e.g., `has_organization_role(..., 'owner')` for billing subscriptions, SSO tables).
+2. **Application.** `planAllowsFeature(plan, feature)` from `src/lib/billing/plans.ts` is the single source of truth. Server actions check both role and plan before any mutation.
+3. **UI.** Upgrade prompts and disabled controls inform users but are never the security boundary.
+
+### Transport + headers
+
+From `next.config.ts`:
+
+- `Strict-Transport-Security: max-age=63072000; includeSubDomains; preload`
+- `X-Frame-Options: DENY`
+- `X-Content-Type-Options: nosniff`
+- `Referrer-Policy: strict-origin-when-cross-origin`
+- `Permissions-Policy: camera=(), microphone=(), geolocation=()`
+- `Content-Security-Policy` — per-route; `'unsafe-inline'` currently permitted for Next.js RSC inline scripts (tighten in a follow-up with nonces)
+
+### Secrets management
+
+- No secrets in the repo under any circumstances.
+- `.env.example` documents every required env var with empty values.
+- `gitleaks protect --staged` runs in the pre-commit hook (install instruction in `CONTRIBUTING.md`); `gitleaks detect` runs in CI on every push.
+- `npm audit --audit-level=moderate` fails CI on moderate+ advisories (tightened from the default `high` per Gemini Phase 0).
+- Service-role Supabase client is **only** used by webhook handlers and background jobs. User-context reads use `createServerClient(cookies)` with the user's session JWT (Gemini Phase 0 CRITICAL constraint).
+
+### Input validation
+
+- Every server action starts with `requireSession()` + `z.object({...}).safeParse(formData)`.
+- Every route handler validates headers, content-length, body shape before any business logic.
+- Template config validation strips `__proto__`, `constructor`, `prototype` keys and rejects unknown fields (`src/lib/templates/validator.ts` + 30 fuzz assertions in `src/tests/templates/schema-fuzz.test.ts`).
+- CSV exports prefix cells starting with `= + - @ TAB CR` with a single quote to defuse Excel/Sheets formula injection (OWASP CSV Injection guidance).
+
+---
 
 ## CODEOWNERS
 
 The following paths require explicit review from a security-aware reviewer:
 
 ```
-supabase/migrations/        — RLS changes
-src/middleware.ts           — session guard
-src/app/api/webhooks/       — webhook receivers
-src/lib/auth/               — auth utilities
-src/lib/stripe/             — billing/payment
+supabase/migrations/              RLS changes
+src/proxy.ts                      Edge session guard
+src/app/api/webhooks/             Webhook receivers
+src/app/api/audit/export/         Audit export (CSV/JSON)
+src/app/api/sso/                  SCIM token actions
+src/lib/auth/                     Auth utilities
+src/lib/audit/                    Audit emitter + serializer
+src/lib/billing/                  Plan definitions
+src/lib/stripe/                   Stripe adapter + signature
+src/lib/sso/                      WorkOS adapter
+.github/workflows/                CI + security workflows
 ```
 
-See [`CODEOWNERS`](CODEOWNERS) for the full list.
+See [`CODEOWNERS`](CODEOWNERS) for the canonical list.
+
+---
+
+## Threat model
+
+Full STRIDE analysis lives in [`docs/threat-model.md`](./docs/threat-model.md).
+
+---
+
+## Deferred council gates
+
+The following Gemini reviews are queued against Owen's personal AI Studio account (currently out of credit):
+
+- Phase 2 RLS second opinion
+- Phase 5 webhook × RLS diff review
+- Phase 7 whole-repo audit
+- Phase 8 final adversarial pre-push
+
+All four roll into one comprehensive Gemini pass before any public release. Until then, Codex gpt-5.4 has covered the adversarial surface — Phase 2 council-gate report documents 11 findings triaged and fixed.

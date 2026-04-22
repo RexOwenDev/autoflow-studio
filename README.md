@@ -1,206 +1,216 @@
-<div align="center">
-
 # AutoFlow Studio
 
-**Multi-tenant automation management SaaS** — enterprise-ready, security-first, production-grade skeleton.
+Multi-tenant automation management platform. Teams ingest webhook events, route them through configurable workflows (n8n-compatible), and observe every execution from a live dashboard — with SOC2-aligned audit trails, tier-based billing, and Enterprise SAML/SCIM.
 
-[![CI](https://img.shields.io/github/actions/workflow/status/RexOwenDev/autoflow-studio/ci.yml?branch=main&label=CI&style=flat-square)](https://github.com/RexOwenDev/autoflow-studio/actions)
-[![Security Scan](https://img.shields.io/github/actions/workflow/status/RexOwenDev/autoflow-studio/security.yml?branch=main&label=Security&style=flat-square&color=green)](https://github.com/RexOwenDev/autoflow-studio/actions)
-[![TypeScript](https://img.shields.io/badge/TypeScript-strict-blue?style=flat-square&logo=typescript)](https://www.typescriptlang.org/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)](LICENSE)
-
-*A white-label automation platform where each client tenant manages their workflows — without ever touching the underlying automation engine.*
+Runs end-to-end in **fixture mode** with zero accounts, zero network calls, and zero configuration. Live mode (Phase 8+ wiring) swaps in real Supabase, Stripe, and WorkOS behind the same adapter interfaces.
 
 ---
 
-<!-- hero banner generated in Phase 8 -->
-<!-- ![AutoFlow Studio](docs/hero-banner.jpg) -->
+## Why this exists
 
-</div>
-
----
-
-## Overview
-
-AutoFlow Studio gives non-technical teams full control over their automation workflows: configure variables, monitor executions in real-time, retry failures, and track every action in a tamper-evident audit log — all within their own isolated workspace.
-
-Built to demonstrate enterprise-grade SaaS architecture: **multi-tenancy via Supabase RLS**, **Stripe execution metering**, **n8n webhook integration**, **WorkOS SSO**, and **SOC2-aligned audit logging** — all running in a fully fixture-driven mode that requires zero external accounts to evaluate.
+This repo is a working reference for the pattern most SaaS tutorials skip: how to ship a **multi-tenant, RLS-enforced, webhook-driven** platform with real security boundaries — not a CRUD app with an auth wrapper. Every table has RLS policies with `pgTAP` denial tests. Every webhook verifies HMAC signatures with timing-safe compares, replay windows, and idempotency keys. Every mutation emits an audit event. Every feature is gated by plan and role at the schema level — not just in the UI.
 
 ---
 
-## Feature Matrix
+## Feature matrix
 
-| Feature | Free | Pro | Enterprise |
-|---|:---:|:---:|:---:|
-| Workflow template library | ✅ 5 templates | ✅ Unlimited | ✅ Unlimited |
-| Executions per month | 100 | 10,000 | Unlimited |
-| Real-time execution dashboard | ✅ | ✅ | ✅ |
-| Retry failed runs | ✅ | ✅ | ✅ |
-| Configuration panel (no n8n access) | ✅ | ✅ | ✅ |
-| Tamper-evident audit log | — | ✅ | ✅ |
-| Audit log export (CSV / JSON) | — | — | ✅ |
-| SAML SSO + SCIM provisioning | — | — | ✅ |
-| Multi-member workspace | 1 seat | 5 seats | Unlimited |
-| Feature flags + kill-switches | — | ✅ | ✅ |
-| OpenTelemetry observability | — | ✅ | ✅ |
+| Capability | Free | Pro | Enterprise |
+|---|---|---|---|
+| Monthly executions | 100 | 10,000 | Unlimited |
+| Team seats | 3 | 20 | Unlimited |
+| Audit log retention | 30 days | 365 days | Unlimited |
+| Audit log CSV / JSON export | — | ✓ | ✓ |
+| SAML SSO + SCIM provisioning | — | — | ✓ |
+| Priority support | — | ✓ | ✓ |
+| Custom private templates | — | ✓ | ✓ |
+| 99.9% uptime SLA | — | — | ✓ |
 
 ---
 
-## Architecture
-
-<!-- Architecture diagram generated in Phase 8 -->
-<!-- ![System Architecture](docs/architecture.svg) -->
+## Architecture at a glance
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                   AutoFlow Studio                    │
-│                   (Next.js 16)                       │
-├──────────────┬──────────────┬────────────────────────┤
-│  Workspace   │  Execution   │  Billing               │
-│  (tenant UI) │  Dashboard   │  (Stripe metered)      │
-└──────┬───────┴──────┬───────┴──────┬─────────────────┘
-       │              │              │
-       ▼              ▼              ▼
-┌─────────────────────────────────────────────────────┐
-│              Adapter Interface Layer                 │
-│   StripeAdapter · N8nAdapter · SupabaseAdapter       │
-│   (fixture | live — selected via APP_MODE env)       │
-└──────┬───────────────┬──────────────┬────────────────┘
-       │               │              │
-       ▼               ▼              ▼
-  Supabase RLS      n8n webhooks   Stripe SDK
-  (multi-tenant)   (HMAC verified) (test-mode)
-
-Supabase Schema:
-  organizations → organization_members
-  workflows → workflow_versions
-  executions → execution_events
-  webhook_inbox (replay guard)
-  audit_events (append-only, DB-level trigger)
-  billing_subscriptions → webhook_events (idempotent)
+┌────────────────────────────────────────────────────────────────────┐
+│  Edge Proxy  (src/proxy.ts)                                        │
+│  — default-deny session gate · public path allowlist               │
+└──────────────┬─────────────────────────────────────┬───────────────┘
+               │ authenticated                       │ public
+               ▼                                     ▼
+┌──────────────────────────────┐   ┌──────────────────────────────┐
+│  Next.js 16 App Router       │   │  Webhook handlers            │
+│  Server components           │   │  /api/webhooks/n8n           │
+│  — dashboard, executions,    │   │  /api/webhooks/stripe        │
+│    templates, members,       │   │  — HMAC verify + replay win  │
+│    billing, sso, audit       │   │  — idempotency via UNIQUE    │
+└──────────┬───────────────────┘   └──────────┬───────────────────┘
+           │                                  │
+           ▼                                  ▼
+┌────────────────────────────────────────────────────────────────────┐
+│  Adapter layer  (src/lib/{supabase,n8n,stripe,sso,auth}/adapter.ts)│
+│  Fixture ⇄ Live selected by APP_MODE env                           │
+└──────────┬─────────────────────────────────────────────────────────┘
+           │ Live mode only
+           ▼
+┌────────────────────────────────────────────────────────────────────┐
+│  Supabase Postgres                                                 │
+│  — 9 migrations, RLS deny-by-default + FORCE RLS                   │
+│  — is_organization_member() EXISTS-pattern helper                  │
+│  — audit_events append-only (UPDATE/DELETE/TRUNCATE all blocked)   │
+│  — pgTAP: 45 assertions covering cross-tenant + append-only        │
+└────────────────────────────────────────────────────────────────────┘
 ```
 
----
-
-## Security Model
-
-AutoFlow Studio is built with a **deny-by-default** security posture.
-
-| Guarantee | How it's enforced |
-|---|---|
-| **Tenant isolation** | Supabase RLS on every table; cross-tenant access denied at DB level |
-| **Tamper-evident audit** | `audit_events` is append-only; UPDATE/DELETE blocked by DB trigger |
-| **Webhook integrity** | HMAC signature verification + 5-minute replay window on all inbound webhooks |
-| **Idempotent billing** | Stripe events deduplicated via `webhook_events.stripe_event_id UNIQUE` |
-| **No secrets in repo** | `gitleaks` in CI on every push; `.env.example` only |
-| **Zod-validated boundaries** | Every server action and API route handler validates input |
-| **Enterprise SSO** | WorkOS SAML + SCIM — identity lifecycle managed externally |
-| **CSP + HSTS** | Strict Content-Security-Policy, HSTS, SameSite=Strict cookies |
-
-Full STRIDE threat model: [`docs/threat-model.md`](docs/threat-model.md)
+The full diagram and sequence flows live in [`ARCHITECTURE.md`](./ARCHITECTURE.md).
 
 ---
 
-## Tech Stack
+## Security model (one-page summary)
 
-| Layer | Technology |
-|---|---|
-| Framework | Next.js 16 (App Router) · React 19 |
-| Language | TypeScript (strict) |
-| Styling | Tailwind CSS v4 |
-| Database | Supabase (PostgreSQL + RLS + Realtime) |
-| Auth | Supabase Auth (Free/Pro) · WorkOS SAML/SCIM (Enterprise) |
-| Billing | Stripe SDK — metered + subscription |
-| Automation | n8n webhook integration |
-| Observability | OpenTelemetry (`otel-nextjs` pattern) · Sentry |
-| Feature Flags | GrowthBook (`feature-flags-growthbook` pattern) |
-| Testing | Vitest (unit) · Playwright (e2e) · pgTAP (RLS) |
-| Linting | Biome |
-| CI | GitHub Actions |
+- **Deny by default.** Every migrated table has `ENABLE` + `FORCE ROW LEVEL SECURITY`. Policies grant SELECT/INSERT/UPDATE/DELETE via explicit `EXISTS` checks against `organization_members`, not scalar JWT claims. Missing policy = no access.
+- **Admin can't self-promote to owner.** `UPDATE organization_members SET role = 'owner'` is blocked by a split policy — admins manage only non-owner rows. Pinned by a pgTAP assertion.
+- **Last owner can't orphan an org.** `BEFORE DELETE` trigger rejects the last owner's removal; `BEFORE UPDATE` blocks demotion.
+- **Workflow versions can't cross tenants.** Composite FK `(workflow_id, organization_id) → workflows(id, organization_id)` rejects rows whose two tenant references disagree.
+- **Audit log is append-only at the trigger level.** Three triggers block UPDATE, DELETE, and TRUNCATE — even for superuser, by design. Plus `REVOKE` belt-and-braces. DBA-tier tamper resistance requires out-of-band controls (documented, Phase 8+ ops).
+- **Webhook signatures are timing-safe.** HMAC-SHA256 verify uses `timingSafeEqual`. All auth failures return an identical response shape — no oracle reveals which control tripped.
+- **Webhook bodies are idempotency-bound.** Executions require `idempotency_key` when `trigger_source = 'webhook'`. `webhook_inbox` UNIQUE on `(source, lower(idempotency_key))` — case-insensitive dedup prevents replay under case variants.
+- **Billing IDs are owner-gated.** `billing_subscriptions` SELECT restricted to owner; members see plan/usage via `billing_subscription_member_view` (security_invoker) without leaking `stripe_customer_id`.
+- **Secrets never echo in errors.** Template validator scrubs secret-field error messages. Audit diff emitter redacts keys matching `/token|password|secret|key|authorization/i` before persisting.
+- **CSV exports are formula-injection safe.** Cells starting with `= + - @ TAB CR` are prefixed with a single quote (OWASP).
+
+Full threat model: [`docs/threat-model.md`](./docs/threat-model.md). Phase 2 council gate findings + resolutions: [`docs/phase-2-council-gate.md`](./docs/phase-2-council-gate.md).
 
 ---
 
-## Project Phases
+## Tech stack
 
-Each phase ships as a tagged commit so you can walk the build history.
-
-| Phase | Tag | Description |
+| Layer | Choice | Why |
 |---|---|---|
-| 0 | `v0.1.0-phase0` | Charter, governance, threat model |
-| 1 | `v0.2.0-phase1` | Next.js scaffold, CI, OTel, Biome |
-| 2 | `v0.3.0-phase2` | Multi-tenant schema + RLS (pgTAP verified) |
-| 3 | `v0.4.0-phase3` | Auth, workspace switcher, member invites |
-| 4 | `v0.5.0-phase4` | Workflow template library + config forms |
-| 5 | `v0.6.0-phase5` | n8n webhook ingest + execution dashboard |
-| 6 | `v0.7.0-phase6` | Stripe billing + plan tiers + feature flags |
-| 7 | `v0.8.0-phase7` | Enterprise SSO, audit export, observability |
-| 8 | `v1.0.0` | Docs, visuals, release — public |
+| Framework | Next.js 16 (App Router, proxy) | RSC-first, Edge-aware proxy, file-based routing matches teams' mental model |
+| Language | TypeScript (strict++) | `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `noImplicitOverride`, `forceConsistentCasingInFileNames` |
+| Styling | Tailwind v4 + CSS custom properties | Token-based design system, dark-first with light-mode overrides |
+| Database | Postgres + Supabase RLS | RLS is the security boundary, not app code |
+| Schema validation | Zod | One schema for DB/Server Actions/client forms |
+| Webhook crypto | Node `crypto` | HMAC-SHA256 + `timingSafeEqual` |
+| Auth (Phase 7+ live) | Supabase Auth + WorkOS SAML/SCIM (Enterprise) | Matches real SaaS tier structure |
+| Billing (Phase 7+ live) | Stripe (test + live) | Signed webhooks, metered usage |
+| Observability | OpenTelemetry + `@vercel/otel` | 10% sampled in prod |
+| Test | Vitest (120 tests) + pgTAP (45 assertions) | Unit + integration + RLS |
+| Lint / format | Biome v2 | Faster than ESLint, single config |
+| CI | GitHub Actions | typecheck → lint → test → build → security |
 
 ---
 
-## Running Locally
+## Running locally
 
-> **Zero accounts required.** `APP_MODE=fixture` (default) routes all SDK calls to deterministic fixture adapters. No Stripe keys, no Supabase project, no n8n instance.
+No accounts. No keys. One command:
 
 ```bash
-git clone https://github.com/RexOwenDev/autoflow-studio.git
-cd autoflow-studio
-pnpm install
-cp .env.example .env.local   # no values needed for fixture mode
-pnpm dev
+npm install
+APP_MODE=fixture npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+Open `http://localhost:3000/dashboard`. You're signed in as Rex Quintenta, Owner of Acme Corp, with 100 seeded executions and a Pro plan.
 
-To seed the execution dashboard with realistic fixture data:
+**Fixture mode is the default.** Everything works offline — Supabase queries route to `FixtureSupabaseAdapter`, Stripe to `FixtureStripeAdapter`, WorkOS to `FixtureWorkOSAdapter`. Live mode is gated by `APP_MODE=live` + environment variables; see `.env.example`.
+
+### Regenerating seed data
 
 ```bash
-pnpm seed:executions   # 100 fixture runs across 5 workflow templates
-pnpm seed:billing      # mock subscription states + invoices
+npm run seed:executions   # 100 deterministic runs over 72h, mulberry32(seed=42)
+```
+
+### Tests
+
+```bash
+npm test                  # Vitest: 120 tests across webhooks, auth bypass, templates, audit export, rate limiter
+```
+
+### Build + type-check + lint
+
+```bash
+npm run typecheck
+npm run lint:ci
+npm run build
 ```
 
 ---
 
-## Running Tests
+## Phase timeline
 
-```bash
-pnpm typecheck          # TypeScript strict check
-pnpm lint               # Biome lint + format
-pnpm test               # Vitest unit tests (includes RLS pgTAP suite)
-pnpm test:e2e           # Playwright end-to-end
-```
+Every phase shipped as a signed git tag. Council gates (Codex adversarial review; Gemini second-opinion where credits available) documented in `PROJECT-MEMORY.md`.
 
----
-
-## Environment Variables
-
-See [`.env.example`](.env.example) for the full list. All variables are optional in fixture mode.
-
-| Variable | Required (live mode) | Description |
+| Tag | Phase | Scope |
 |---|---|---|
-| `APP_MODE` | No | `fixture` (default) or `live` |
-| `NEXT_PUBLIC_SUPABASE_URL` | Live only | Supabase project URL |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Live only | Supabase anon key |
-| `SUPABASE_SERVICE_ROLE_KEY` | Live only | Server-side Supabase key |
-| `STRIPE_SECRET_KEY` | Live only | Stripe secret (never commit) |
-| `STRIPE_WEBHOOK_SECRET` | Live only | Stripe webhook signing secret |
-| `N8N_WEBHOOK_SECRET` | Live only | HMAC secret for n8n events |
-| `WORKOS_API_KEY` | Enterprise only | WorkOS API key |
-| `WORKOS_CLIENT_ID` | Enterprise only | WorkOS OAuth client ID |
+| `v0.1.0-phase0` | Charter & governance | Threat model, SECURITY, CODEOWNERS, CI skeleton |
+| `v0.2.0-phase1` | Foundation | Next.js scaffold, Tailwind v4, OTel, default-deny proxy |
+| `v0.3.0-phase2` | Multi-tenant schema + RLS | 6 migrations, RLS helpers, 2 pgTAP suites |
+| `v0.3.1-phase2-fixes` | Codex adversarial gate | 1 CRITICAL + 3 HIGH + 4 MEDIUM + 3 LOW fixes |
+| `v0.4.0-phase3` | Auth + Workspaces | Sign-in/up, workspace switcher, member invites, 21 bypass tests |
+| `v0.5.0-phase4` | Templates + config | 5 fixture templates, JSON-schema ConfigForm, fuzz tests |
+| `v0.6.0-phase5` | n8n webhook + executions | HMAC verify, 100-run seed, executions table + detail, audit log UI |
+| `v0.7.0-phase6` | Stripe billing | Fixture-only: pricing, plan switcher, usage meter, 14 route tests |
+| `v0.8.0-phase7` | Enterprise tier | WorkOS SSO/SCIM, audit export (CSV/JSON), rate limiter, plan gates |
+| `v1.0.0` | Release prep | Enterprise README, ARCHITECTURE, ADRs, CHANGELOG, CONTRIBUTING |
 
 ---
 
-## Documentation
+## Repository layout
 
-- [`ARCHITECTURE.md`](ARCHITECTURE.md) — system design, adapter pattern, data flow
-- [`SECURITY.md`](SECURITY.md) — security policy, disclosure, RLS guarantees
-- [`docs/threat-model.md`](docs/threat-model.md) — STRIDE threat analysis
-- [`docs/adr/`](docs/adr/) — architecture decision records
-- [`CONTRIBUTING.md`](CONTRIBUTING.md) — contribution guide
-- [`CHANGELOG.md`](CHANGELOG.md) — phase-by-phase changelog
+```
+src/
+  app/
+    (app)/              # Authenticated shell (sidebar + main)
+      audit/            # Admin+ audit timeline
+      dashboard/        # Metrics + recent executions + plan usage
+      executions/       # Filtered table + per-run detail + retry
+      settings/         # Members, billing, sso, audit export
+      templates/        # Gallery + detail + configure flow
+      workflows/        # Per-workflow pages (Phase 8+ expansion)
+    auth/               # Sign-in, sign-up, magic-link, forgot-password, accept-invite
+    api/
+      webhooks/         # n8n + Stripe receivers
+      audit/export/     # CSV/JSON download route
+      auth/invites/     # Invite create/redeem/revoke server actions
+      billing/          # Plan change + cancel server actions
+      executions/       # Retry + cancel server actions
+      sso/              # SCIM token server actions
+      templates/        # Use-template + save-config server actions
+    pricing/            # Public marketing page
+  components/           # Button, Badge, Card, Input, Separator, ConfigForm, StatusPill, Sidebar
+  lib/
+    audit/              # Emitter + CSV/JSON serializer
+    auth/               # AuthAdapter + session helpers
+    billing/            # PLAN_DEFINITIONS, computeUsageStatus
+    db/                 # Server-only query helpers
+    n8n/                # N8nAdapter + HMAC primitive + seed data
+    otel/               # Exporter factory + sampler
+    sso/                # WorkOSAdapter
+    stripe/             # StripeAdapter + Stripe-Signature wrapper
+    supabase/           # SupabaseAdapter interface + FixtureSupabaseAdapter + fixtures
+    templates/          # Zod schemas + validator + fixture library
+  proxy.ts              # Edge session gate + public allowlist
+  tests/                # Vitest suites (120 total) + pgTAP (in supabase/tests/)
+supabase/
+  migrations/           # 9 forward-only migrations
+  tests/rls/            # pgTAP: cross-tenant-denial + append-only-audit
+scripts/
+  seed-executions.ts    # Deterministic execution generator
+docs/
+  adr/                  # Architecture decision records (0001–0006)
+  phase-2-council-gate.md
+  threat-model.md
+```
+
+---
+
+## Status
+
+**Phases 0–8 complete.** `v1.0.0` is the release-prep milestone: docs, ADRs, changelog. Repo stays private while the Gemini whole-repo audit remains queued (personal AI Studio credits depleted — will run before any public release).
+
+Questions, findings, or engagement inquiries: see [`CONTRIBUTING.md`](./CONTRIBUTING.md) and [`SECURITY.md`](./SECURITY.md).
 
 ---
 
 ## License
 
-MIT © [Rex Owen Quintenta](https://github.com/RexOwenDev)
+MIT. See [`LICENSE`](./LICENSE).

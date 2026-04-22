@@ -347,7 +347,9 @@ src/lib/
 
 ### Phase 8: Documentation, Visuals, Release
 
-**Status:** `PENDING`
+**Status:** `COMPLETE — docs ship, repo stays PRIVATE` (v1.0.0)
+**Gemini visuals:** DEFERRED (personal AI Studio credits depleted). Phase 8 adversarial pre-push review also deferred until credits replenish — will run as a single comprehensive pass covering Phase 2/5/7/8 gates before any public flip.
+**Public flip:** ON HOLD per Owen (2026-04-22). Repo remains private until Gemini gate closes.
 **Goal:** Enterprise README, Gemini visual suite, v1.0.0 release, flip to public.
 
 #### Dispatch Brief
