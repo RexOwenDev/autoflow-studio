@@ -49,6 +49,12 @@ create table executions (
   created_at          timestamptz not null default now(),
   constraint executions_finish_after_start check (
     finished_at is null or started_at is null or finished_at >= started_at
+  ),
+  -- Codex MEDIUM fix: webhook-triggered executions MUST carry an idempotency key so the
+  -- partial unique index actually dedupes. NULL-key webhooks would otherwise create
+  -- duplicate runs for replayed events.
+  constraint executions_webhook_requires_idempotency check (
+    trigger_source <> 'webhook' or idempotency_key is not null
   )
 );
 

@@ -24,13 +24,17 @@ create table webhook_inbox (
   rejected_reason     text,
   received_at         timestamptz not null default now(),
   processed_at        timestamptz,
-  constraint webhook_inbox_idempotency_unique unique (source, idempotency_key),
+  -- Codex LOW fix: case-insensitive uniqueness on idempotency_key.
+  -- Some upstream providers normalize keys lowercase; accepting case variants
+  -- would let a replay attacker bypass dedup with `ABC123` vs `abc123`.
   constraint webhook_inbox_rejected_reason_consistency check (
     (status = 'rejected' and rejected_reason is not null)
     or (status <> 'rejected')
   )
 );
 
+create unique index webhook_inbox_source_idempotency_lower_idx
+  on webhook_inbox (source, lower(idempotency_key));
 create index webhook_inbox_received_idx on webhook_inbox (received_at desc);
 create index webhook_inbox_status_idx on webhook_inbox (status) where status = 'received';
 

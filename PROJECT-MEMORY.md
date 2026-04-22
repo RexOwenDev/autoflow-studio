@@ -175,7 +175,8 @@ src/lib/
 
 ### Phase 2: Multi-Tenant Schema + RLS
 
-**Status:** `IMPLEMENTATION COMPLETE — awaiting council gate (Gemini RLS + Codex adversarial)` (v0.3.0-phase2)
+**Status:** `COMPLETE — council gate PASSED with fixes` (v0.3.0-phase2 → v0.3.1-phase2-fixes)
+**Council gate:** see `docs/phase-2-council-gate.md`. Codex adversarial returned CONDITIONAL (1 CRITICAL + 3 HIGH + 4 MEDIUM + 3 LOW); all in-scope items fixed. Gemini second-opinion deferred to Phase 7 final pre-push (credits depleted on `ai.studio` project — Owen to top up before that gate).
 **Goal:** Full Postgres schema with RLS. Cross-tenant access provably denied.
 
 #### Dispatch Brief
@@ -207,8 +208,8 @@ src/lib/
 - [HIGH from audit] RLS policies MUST use `EXISTS (SELECT 1 FROM organization_members m WHERE m.user_id = auth.uid() AND m.org_id = [table].org_id)` — NOT the scalar `app_metadata.org_id` JWT claim. Supports multi-org users + avoids stale-token bypass.
 
 **Council Gate:**
-- [ ] Gemini RLS second opinion (pipe all migration SQL)
-- [ ] `/codex:adversarial-review` on migrations + RLS policies
+- [x] `/codex:adversarial-review` on migrations + RLS policies — CONDITIONAL → fixes applied (CRITICAL admin-promote, HIGH workflow_versions composite FK, HIGH last-owner trigger, HIGH audit admin-only, MEDIUM webhook idempotency CHECK, MEDIUM tamper-proof docs, MEDIUM pgTAP coverage 18→34 + 7→11, LOW case-insensitive idempotency, LOW Stripe IDs owner-only via member-safe view, LOW pgTAP exact SQLSTATE)
+- [ ] Gemini RLS second opinion — DEFERRED to Phase 7 final pre-push (credits depleted, both keys returned 429)
 
 ---
 

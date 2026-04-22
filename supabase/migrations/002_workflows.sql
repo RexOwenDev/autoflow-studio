@@ -22,7 +22,9 @@ create table workflows (
   created_at        timestamptz not null default now(),
   updated_at        timestamptz not null default now(),
   archived_at       timestamptz,
-  constraint workflows_name_not_empty check (length(trim(name)) > 0)
+  constraint workflows_name_not_empty check (length(trim(name)) > 0),
+  -- Codex HIGH fix: composite uniqueness lets workflow_versions enforce tenant integrity via FK.
+  constraint workflows_id_org_unique unique (id, organization_id)
 );
 
 create index workflows_org_status_idx on workflows (organization_id, status) where archived_at is null;
@@ -30,7 +32,7 @@ create index workflows_org_updated_idx on workflows (organization_id, updated_at
 
 create table workflow_versions (
   id                uuid primary key default gen_random_uuid(),
-  workflow_id       uuid not null references workflows(id) on delete cascade,
+  workflow_id       uuid not null,
   organization_id   uuid not null references organizations(id) on delete cascade,
   version           integer not null,
   config            jsonb not null,     -- validated at app layer (Zod) before insert
@@ -38,7 +40,14 @@ create table workflow_versions (
   created_by        uuid references auth.users(id) on delete set null,
   created_at        timestamptz not null default now(),
   unique (workflow_id, version),
-  constraint workflow_versions_version_positive check (version > 0)
+  constraint workflow_versions_version_positive check (version > 0),
+  -- Codex HIGH fix: tenant integrity — workflow_id and organization_id MUST refer to the same tenant.
+  -- The composite FK closes the bypass where a member of org A inserts a version row tagged with
+  -- org A but pointing at org B's workflow_id.
+  constraint workflow_versions_workflow_org_fk
+    foreign key (workflow_id, organization_id)
+    references workflows(id, organization_id)
+    on delete cascade
 );
 
 create index workflow_versions_workflow_idx on workflow_versions (workflow_id, version desc);

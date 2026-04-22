@@ -198,6 +198,25 @@ export interface BillingSubscription {
   updated_at: string;
 }
 
+/**
+ * Member-safe projection of billing_subscriptions (excludes Stripe identifiers).
+ * Used by the dashboard plan-usage widget so non-owner members can see plan/usage
+ * without gaining access to billing PII.
+ *
+ * Backed in live mode by the `billing_subscription_member_view` Postgres view.
+ */
+export interface BillingSubscriptionMemberView {
+  organization_id: string;
+  plan: OrganizationPlan;
+  status: SubscriptionStatus;
+  current_period_start: string | null;
+  current_period_end: string | null;
+  cancel_at_period_end: boolean;
+  trial_ends_at: string | null;
+  seats: number;
+  metered_usage_current: number;
+}
+
 export interface WebhookEvent {
   id: string;
   provider: string;

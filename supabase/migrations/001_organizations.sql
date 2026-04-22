@@ -158,16 +158,41 @@ create policy organization_members_select_self_or_peer
     or is_organization_member(organization_id)
   );
 
-create policy organization_members_insert_admin
+-- Admins can invite non-owner members. Only owners can grant the 'owner' role.
+-- (Codex CRITICAL fix: prevents admin → owner self-promotion.)
+create policy organization_members_insert_admin_non_owner
   on organization_members for insert
   to authenticated
-  with check (has_organization_role(organization_id, 'admin'));
+  with check (
+    has_organization_role(organization_id, 'admin')
+    and role <> 'owner'
+  );
 
-create policy organization_members_update_admin
+create policy organization_members_insert_owner_any_role
+  on organization_members for insert
+  to authenticated
+  with check (
+    has_organization_role(organization_id, 'owner')
+  );
+
+-- Admins can change roles, but never to/from 'owner'. Owners manage owner transitions.
+create policy organization_members_update_admin_non_owner
   on organization_members for update
   to authenticated
-  using (has_organization_role(organization_id, 'admin'))
-  with check (has_organization_role(organization_id, 'admin'));
+  using (
+    has_organization_role(organization_id, 'admin')
+    and role <> 'owner'
+  )
+  with check (
+    has_organization_role(organization_id, 'admin')
+    and role <> 'owner'
+  );
+
+create policy organization_members_update_owner_any
+  on organization_members for update
+  to authenticated
+  using (has_organization_role(organization_id, 'owner'))
+  with check (has_organization_role(organization_id, 'owner'));
 
 create policy organization_members_delete_admin_or_self
   on organization_members for delete
@@ -176,6 +201,70 @@ create policy organization_members_delete_admin_or_self
     has_organization_role(organization_id, 'admin')
     or user_id = auth.uid()
   );
+
+-- Codex HIGH fix: block self-delete of the last remaining owner — prevents org orphaning.
+create or replace function organization_members_block_last_owner_delete()
+returns trigger
+language plpgsql
+as $$
+declare
+  remaining_owners integer;
+begin
+  if old.role <> 'owner' then
+    return old;
+  end if;
+
+  select count(*)
+    into remaining_owners
+    from organization_members m
+    where m.organization_id = old.organization_id
+      and m.role = 'owner'
+      and m.user_id <> old.user_id;
+
+  if remaining_owners = 0 then
+    raise exception 'cannot remove the last owner of organization %', old.organization_id
+      using errcode = 'restrict_violation';
+  end if;
+
+  return old;
+end;
+$$;
+
+create trigger organization_members_no_last_owner_delete
+  before delete on organization_members
+  for each row execute function organization_members_block_last_owner_delete();
+
+-- Same protection for role demotions (owner → non-owner) by the only owner.
+create or replace function organization_members_block_last_owner_demote()
+returns trigger
+language plpgsql
+as $$
+declare
+  remaining_owners integer;
+begin
+  if old.role <> 'owner' or new.role = 'owner' then
+    return new;
+  end if;
+
+  select count(*)
+    into remaining_owners
+    from organization_members m
+    where m.organization_id = old.organization_id
+      and m.role = 'owner'
+      and m.user_id <> old.user_id;
+
+  if remaining_owners = 0 then
+    raise exception 'cannot demote the last owner of organization %', old.organization_id
+      using errcode = 'restrict_violation';
+  end if;
+
+  return new;
+end;
+$$;
+
+create trigger organization_members_no_last_owner_demote
+  before update on organization_members
+  for each row execute function organization_members_block_last_owner_demote();
 
 -- --- organization_invites -------------------------------------------------
 create policy organization_invites_select_admin

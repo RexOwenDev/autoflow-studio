@@ -80,12 +80,12 @@ alter table billing_subscriptions force row level security;
 alter table webhook_events        force row level security;
 
 -- --- billing_subscriptions ------------------------------------------------
--- All members can see their org's plan/usage (dashboard widget).
--- Only admins can trigger plan changes (handled via server action → Stripe → webhook).
-create policy billing_subscriptions_select_member
+-- Codex LOW fix: full row (including stripe_customer_id, stripe_subscription_id) is owner-only.
+-- Members get plan/usage via the redacted view billing_subscription_member_view defined below.
+create policy billing_subscriptions_select_owner
   on billing_subscriptions for select
   to authenticated
-  using (is_organization_member(organization_id));
+  using (has_organization_role(organization_id, 'owner'));
 
 -- INSERT/UPDATE/DELETE reserved for Stripe webhook handler (service role).
 
@@ -103,3 +103,36 @@ create policy webhook_events_select_owner
 
 comment on table webhook_events is
   'Stripe webhook idempotency ledger. UNIQUE (provider, event_id) prevents double-processing.';
+
+-- =============================================================================
+-- MEMBER-SAFE VIEW (Codex LOW fix follow-on)
+-- Exposes plan/usage/period to all org members WITHOUT leaking Stripe identifiers.
+-- security_invoker=on ensures the underlying RLS policies on organization_members
+-- are evaluated against the calling user's auth.uid(), not the view owner.
+-- =============================================================================
+create view billing_subscription_member_view
+with (security_invoker = on)
+as
+select
+  s.organization_id,
+  s.plan,
+  s.status,
+  s.current_period_start,
+  s.current_period_end,
+  s.cancel_at_period_end,
+  s.trial_ends_at,
+  s.seats,
+  s.metered_usage_current
+from billing_subscriptions s
+where exists (
+  select 1
+  from organization_members m
+  where m.organization_id = s.organization_id
+    and m.user_id = auth.uid()
+);
+
+revoke all on billing_subscription_member_view from public;
+grant select on billing_subscription_member_view to authenticated;
+
+comment on view billing_subscription_member_view is
+  'Member-safe projection of billing_subscriptions: plan/usage/period only, no Stripe identifiers. Use from server-only data layer for the dashboard plan-usage widget.';

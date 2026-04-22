@@ -91,17 +91,20 @@ revoke update, delete, truncate on audit_events from anon;
 alter table audit_events enable row level security;
 alter table audit_events force row level security;
 
--- Org members can read their org's audit log.
--- Enterprise tier will gate this via feature flag at app layer; DB allows all members.
-create policy audit_events_select_member
+-- Codex HIGH fix: SELECT restricted to admins/owners.
+-- Rationale: diff JSONB may contain sensitive before/after payloads (settings, billing data,
+-- member emails on role changes). Even with app-layer redaction, defense-in-depth restricts
+-- raw row access to admin+. Phase 5 will expose a member-safe audit feed via a redacted view
+-- (e.g., omitting diff for security.* and billing.* actions).
+create policy audit_events_select_admin
   on audit_events for select
   to authenticated
-  using (is_organization_member(organization_id));
+  using (has_organization_role(organization_id, 'admin'));
 
 -- No INSERT policy for authenticated users — events emitted by server actions (service role).
 -- UPDATE/DELETE blocked by triggers above regardless of any policy.
 
 comment on table audit_events is
-  'SOC2-aligned append-only audit log. UPDATE/DELETE/TRUNCATE blocked at DB trigger level (Gemini HIGH).';
+  'SOC2-aligned append-only audit log. UPDATE/DELETE/TRUNCATE blocked at trigger level for the standard Postgres role chain. NOTE: a DBA with table ownership can still bypass via DISABLE TRIGGER / DROP TABLE — table ownership must be locked to a dedicated migrator role + WAL-archived for a true tamper-evident chain (tracked Phase 7).';
 comment on function audit_events_block_mutation() is
-  'Append-only enforcement for audit_events. Raises insufficient_privilege on any mutation attempt.';
+  'Append-only enforcement for audit_events. Raises insufficient_privilege on any mutation attempt by the application role chain. Does not protect against table-owner DDL — use ownership lockdown + WAL archive for that guarantee.';

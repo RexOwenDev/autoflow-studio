@@ -3,6 +3,7 @@ import { APP_MODE } from "@/lib/env";
 import type {
   AuditEvent,
   BillingSubscription,
+  BillingSubscriptionMemberView,
   Execution,
   ExecutionEvent,
   Organization,
@@ -45,7 +46,17 @@ export interface SupabaseAdapter {
   listAuditEvents(organizationId: string, limit?: number): Promise<AuditEvent[]>;
 
   // --- billing -----------------------------------------------------------
+  /**
+   * Owner-only: full subscription including Stripe identifiers.
+   * Use from server actions that need to talk to Stripe.
+   */
   getSubscription(organizationId: string): Promise<BillingSubscription | null>;
+
+  /**
+   * Member-safe: plan/usage/period only. Backed by `billing_subscription_member_view`
+   * in live mode. Use from member-facing UI (e.g. dashboard plan-usage widget).
+   */
+  getSubscriptionForMember(organizationId: string): Promise<BillingSubscriptionMemberView | null>;
 }
 
 // =============================================================================

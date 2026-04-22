@@ -2,6 +2,7 @@ import "server-only";
 import type {
   AuditEvent,
   BillingSubscription,
+  BillingSubscriptionMemberView,
   Execution,
   ExecutionEvent,
   Organization,
@@ -79,6 +80,25 @@ export function createFixtureAdapter(): SupabaseAdapter {
 
     async getSubscription(organizationId: string): Promise<BillingSubscription | null> {
       return FIXTURE_SUBSCRIPTIONS.find((s) => s.organization_id === organizationId) ?? null;
+    },
+
+    async getSubscriptionForMember(
+      organizationId: string,
+    ): Promise<BillingSubscriptionMemberView | null> {
+      const sub = FIXTURE_SUBSCRIPTIONS.find((s) => s.organization_id === organizationId);
+      if (!sub) return null;
+      // Project to the member-safe shape — no Stripe identifiers.
+      return {
+        organization_id: sub.organization_id,
+        plan: sub.plan,
+        status: sub.status,
+        current_period_start: sub.current_period_start,
+        current_period_end: sub.current_period_end,
+        cancel_at_period_end: sub.cancel_at_period_end,
+        trial_ends_at: sub.trial_ends_at,
+        seats: sub.seats,
+        metered_usage_current: sub.metered_usage_current,
+      };
     },
   };
 }
