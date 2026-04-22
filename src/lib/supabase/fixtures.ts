@@ -1,4 +1,5 @@
 import "server-only";
+import { GENERATED_EXECUTION_EVENTS, GENERATED_EXECUTIONS } from "@/lib/n8n/seed-executions";
 import type {
   AuditEvent,
   BillingSubscription,
@@ -181,108 +182,10 @@ export const FIXTURE_WORKFLOWS: readonly Workflow[] = [
 // EXECUTIONS — varied statuses for dashboard realism
 // =============================================================================
 
-export const FIXTURE_EXECUTIONS: readonly Execution[] = [
-  {
-    id: "ee000001-0001-0001-0001-000000000001",
-    organization_id: FIXTURE_ORG_A_ID,
-    workflow_id: WF_LEAD_CAPTURE,
-    workflow_version_id: null,
-    status: "success",
-    trigger_source: "webhook",
-    idempotency_key: "lead_2026_001",
-    started_at: minutesAgo(2),
-    finished_at: minutesAgo(2),
-    duration_ms: 1200,
-    error_message: null,
-    created_at: minutesAgo(2),
-  },
-  {
-    id: "ee000002-0002-0002-0002-000000000002",
-    organization_id: FIXTURE_ORG_A_ID,
-    workflow_id: WF_SLACK_NOTIFIER,
-    workflow_version_id: null,
-    status: "success",
-    trigger_source: "webhook",
-    idempotency_key: "stripe_evt_001",
-    started_at: minutesAgo(5),
-    finished_at: minutesAgo(5),
-    duration_ms: 800,
-    error_message: null,
-    created_at: minutesAgo(5),
-  },
-  {
-    id: "ee000003-0003-0003-0003-000000000003",
-    organization_id: FIXTURE_ORG_A_ID,
-    workflow_id: WF_DAILY_DIGEST,
-    workflow_version_id: null,
-    status: "failed",
-    trigger_source: "schedule",
-    idempotency_key: null,
-    started_at: minutesAgo(12),
-    finished_at: minutesAgo(12),
-    duration_ms: 3100,
-    error_message: "SMTP timeout connecting to mail.acme.com:587",
-    created_at: minutesAgo(12),
-  },
-  {
-    id: "ee000004-0004-0004-0004-000000000004",
-    organization_id: FIXTURE_ORG_A_ID,
-    workflow_id: WF_WEBHOOK_EMAIL,
-    workflow_version_id: null,
-    status: "success",
-    trigger_source: "webhook",
-    idempotency_key: "wh_2026_001",
-    started_at: minutesAgo(18),
-    finished_at: minutesAgo(18),
-    duration_ms: 2400,
-    error_message: null,
-    created_at: minutesAgo(18),
-  },
-  {
-    id: "ee000005-0005-0005-0005-000000000005",
-    organization_id: FIXTURE_ORG_A_ID,
-    workflow_id: WF_CSV_SHEETS,
-    workflow_version_id: null,
-    status: "retrying",
-    trigger_source: "manual",
-    idempotency_key: null,
-    started_at: minutesAgo(21),
-    finished_at: null,
-    duration_ms: null,
-    error_message: "Google Sheets API rate limit — retry 1/3",
-    created_at: minutesAgo(21),
-  },
-];
-
-export const FIXTURE_EXECUTION_EVENTS: readonly ExecutionEvent[] = [
-  {
-    id: "evt-001",
-    execution_id: "ee000001-0001-0001-0001-000000000001",
-    organization_id: FIXTURE_ORG_A_ID,
-    kind: "started",
-    node_id: null,
-    payload: {},
-    occurred_at: minutesAgo(2),
-  },
-  {
-    id: "evt-002",
-    execution_id: "ee000001-0001-0001-0001-000000000001",
-    organization_id: FIXTURE_ORG_A_ID,
-    kind: "node_completed",
-    node_id: "hubspot_lookup",
-    payload: { records: 1 },
-    occurred_at: minutesAgo(2),
-  },
-  {
-    id: "evt-003",
-    execution_id: "ee000001-0001-0001-0001-000000000001",
-    organization_id: FIXTURE_ORG_A_ID,
-    kind: "succeeded",
-    node_id: null,
-    payload: {},
-    occurred_at: minutesAgo(2),
-  },
-];
+// 100 seeded executions + events come from scripts/seed-executions.ts → seed-executions.ts.
+// Regenerate with `pnpm seed:executions`. Deterministic mulberry32 PRNG (seed=42).
+export const FIXTURE_EXECUTIONS: readonly Execution[] = GENERATED_EXECUTIONS;
+export const FIXTURE_EXECUTION_EVENTS: readonly ExecutionEvent[] = GENERATED_EXECUTION_EVENTS;
 
 // =============================================================================
 // AUDIT EVENTS — proves the timeline UI in Phase 5

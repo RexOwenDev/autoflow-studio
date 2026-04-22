@@ -268,7 +268,7 @@ src/lib/
 
 ### Phase 5: n8n Webhook Ingest + Execution Dashboard
 
-**Status:** `PENDING`
+**Status:** `COMPLETE` (v0.6.0-phase5) — Gemini diff review deferred to Phase 7 (credits)
 **Goal:** Webhook receiver, execution dashboard (realtime), audit log installed.
 
 #### Dispatch Brief

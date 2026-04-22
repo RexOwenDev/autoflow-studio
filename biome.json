@@ -61,5 +61,23 @@
       "!!**/next-env.d.ts",
       "!!**/globals.css"
     ]
-  }
+  },
+  "overrides": [
+    {
+      "includes": ["src/tests/**", "scripts/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noNonNullAssertion": "off"
+          },
+          "complexity": {
+            "useLiteralKeys": "off"
+          },
+          "correctness": {
+            "noUnusedVariables": "off"
+          }
+        }
+      }
+    }
+  ]
 }
