@@ -97,7 +97,7 @@ src/lib/
 
 ### Phase 0: Charter & Repo
 
-**Status:** `IN-PROGRESS`
+**Status:** `COMPLETE`
 **Goal:** Establish repo structure, governance docs, threat model, Gemini Phase 0 audit.
 
 #### Dispatch Brief
@@ -119,13 +119,16 @@ src/lib/
 - [ ] `.github/workflows/ci.yml` — skeleton (Phase 1 fills body)
 
 **Council Gate:**
-- [ ] Gemini Phase 0 audit: charter + threat model against SOC2-readiness checklist
+- [x] Gemini Phase 0 audit: PASSED with 1 CRITICAL, 5 HIGH, 4 MEDIUM findings. All triaged and written to phase Dispatch Briefs above.
 
 #### Phase Log
 ```
 2026-04-22 — Phase 0 started. Repo initialized at RexOwenDev/autoflow-studio.
              Decisions: private until v1.0.0, fixture-only API mocking,
              Supabase Auth default + WorkOS Enterprise tier.
+2026-04-22 — Phase 0 COMPLETE. Committed v0.1.0-phase0. Gemini audit complete.
+             11 findings triaged: CRITICAL (service role RLS bypass) + HIGH items
+             promoted to Phase 1 + Phase 2 hard constraints. Phase 1 ready to dispatch.
 ```
 
 ---
@@ -152,10 +155,15 @@ src/lib/
 
 **Integration:** Codex CI runs against Sonnet's scaffold. Sonnet doesn't merge until CI green.
 
-**Hard constraints:**
+**Hard constraints (upgraded from Gemini Phase 0 audit):**
 - `runtime: "nodejs"` on all webhook routes (raw body preservation)
 - No `"use client"` on data-fetching components
 - OTel must not instrument fixture adapters
+- [CRITICAL from audit] Default-deny middleware stub MUST exist by end of Phase 1. Allowlist: `/api/webhooks/*`, `/auth/*`, `/`. All other routes → 401 redirect.
+- [HIGH from audit] Webhook route config: `sizeLimit: '1mb'` on Stripe routes, `'5mb'` on n8n routes. Set in Phase 1.
+- [HIGH from audit] Boot-time guard: if `NODE_ENV !== 'development'` and `APP_MODE` is undefined → throw fatal error.
+- [HIGH from audit] Gitleaks in Husky pre-commit hook (not just CI).
+- [MEDIUM from audit] `pnpm audit --audit-level=moderate` in CI (not high).
 
 **QA Checklist:**
 - [ ] `pnpm typecheck` clean
@@ -189,10 +197,12 @@ src/lib/
 
 **Integration:** Codex schema → Sonnet types generated → Sonnet query helpers use types.
 
-**Hard constraints:**
+**Hard constraints (includes Gemini Phase 0 audit upgrades):**
 - RLS DENY by default on all tables — no policy = no access
-- `audit_events` must have a trigger preventing UPDATE/DELETE at DB level
+- `audit_events` must have a trigger preventing UPDATE/DELETE *and* TRUNCATE at DB level
 - Cross-tenant denial test MUST exist before Phase 2 can close
+- [CRITICAL from audit] All user-context queries use `createServerClient` with user session JWT. Service role key NEVER passed to user-context Supabase client — reserved for background jobs + webhook handlers only.
+- [HIGH from audit] RLS policies MUST use `EXISTS (SELECT 1 FROM organization_members m WHERE m.user_id = auth.uid() AND m.org_id = [table].org_id)` — NOT the scalar `app_metadata.org_id` JWT claim. Supports multi-org users + avoids stale-token bypass.
 
 **Council Gate:**
 - [ ] Gemini RLS second opinion (pipe all migration SQL)
@@ -363,6 +373,26 @@ src/lib/
 
 ---
 
+## Gemini Phase 0 Audit Findings (2026-04-22)
+
+All findings must be addressed before their respective phases close. CRITICAL/HIGH items upgraded to hard constraints in relevant phase Dispatch Briefs.
+
+| Severity | Finding | Phase to fix |
+|---|---|---|
+| CRITICAL | Service role key bypasses RLS — Next.js server MUST use user session JWT (`createServerClient` from `@supabase/ssr`) for all user-context queries. Service role restricted to background jobs + webhooks only. | Phase 2 |
+| HIGH | Webhook body limits deferred to Phase 5 — OOM vector. Move `sizeLimit: '1mb'` (Stripe) + `'5mb'` (n8n) to Phase 1 middleware/route config. | Phase 1 |
+| HIGH | `APP_MODE` fail-open — if env var missing in prod, app silently boots in fixture mode. Fix: throw fatal error at boot if `APP_MODE` is undefined in non-development environments. | Phase 1 |
+| HIGH | Middleware deferred to Phase 3 — build Phase 1 default-deny middleware stub immediately; allowlist only `/api/webhooks/*` and auth routes. Prevents unprotected routes accumulating before Phase 3. | Phase 1 |
+| HIGH | RLS JWT single-org claim — scalar `app_metadata.org_id` breaks multi-org enterprise users + stale auth (1h token validity after eviction). Switch to `EXISTS (SELECT 1 FROM memberships WHERE user_id = auth.uid() AND org_id = table.org_id)` pattern. | Phase 2 |
+| HIGH | Gitleaks only in CI — secret already committed by the time CI catches it. Add Gitleaks to Husky pre-commit hook. CI check stays as fallback. | Phase 1 |
+| MEDIUM | Webhook replay TOCTOU — concurrent replay race on `SELECT` + `INSERT`. Fix: `UNIQUE(provider, event_id)` + catch Postgres `23505` unique_violation in adapter. | Phase 5 |
+| MEDIUM | `audit_events` TRUNCATE bypass — add `BEFORE TRUNCATE` statement-level trigger. Document external SIEM streaming as enterprise requirement. | Phase 5 |
+| MEDIUM | GrowthBook client-side flag tampering — all plan gate evaluations must run server-side (`server-only`). Billing plan re-checked against DB on every gated server action. | Phase 6 |
+| MEDIUM | `pnpm audit --audit-level=moderate` (not high) — chains of moderate CVEs can be exploited. Add Socket.dev or Snyk for behavioral analysis. | Phase 1 |
+| PORTFOLIO | React 19 `taint` APIs — use `experimental_taintUniqueValue` + `experimental_taintObjectReference` on sensitive Supabase objects to prevent SSR data leaks. Signals senior enterprise architecture knowledge. | Phase 3 |
+
+---
+
 ## Parked Questions
 
 *(empty)*
@@ -371,10 +401,15 @@ src/lib/
 
 ## Context Checkpoints
 
-### Checkpoint 2026-04-22 — Phase 0 start
+### Checkpoint 2026-04-22 — Phase 0 COMPLETE
 
-**Current phase:** Phase 0 — in-progress (writing governance docs)
-**Codex lane:** Not dispatched yet
-**Next action:** Complete Phase 0 file set → Gemini Phase 0 audit → commit tag v0.1.0-phase0
-**Key constraints:** No live API calls; no secrets; SECURITY.md + threat model before any code
+**Current phase:** Phase 0 — COMPLETE. Moving to Phase 1.
+**Codex lane:** Not yet dispatched (Phase 1 start)
+**Next action:** Phase 1 — Sonnet (Next.js scaffold) + Codex (CI, Biome, OTel, default-deny middleware, gitleaks pre-commit) in parallel
+**Key constraints from Gemini audit to preserve:**
+- Default-deny middleware in Phase 1 (not Phase 3)
+- Webhook body limits in Phase 1
+- Boot-time APP_MODE guard in Phase 1
+- RLS via memberships table (not JWT scalar claim) in Phase 2
+- Service role key never in user-context queries
 **Parked questions:** None
