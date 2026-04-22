@@ -1,6 +1,7 @@
 import { Sidebar } from "@/components/layout/sidebar";
 import { getCurrentUserOrganizations, requireSession } from "@/lib/auth/session";
 import { getOrganizationBySlug } from "@/lib/db/orgs";
+import { getWorkOSAdapter } from "@/lib/sso/adapter";
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -28,6 +29,12 @@ export default async function AppLayout({ children }: AppLayoutProps) {
     throw new Error("[AppLayout] No active organization for authenticated user");
   }
 
+  // SSO indicator — owner-only lookup (matches sso_connections RLS policy).
+  const ssoActive =
+    session.activeRole === "owner"
+      ? (await getWorkOSAdapter().getConnection(activeOrg.id))?.status === "active"
+      : false;
+
   return (
     <div className="flex h-screen overflow-hidden bg-[var(--background)]">
       <Sidebar
@@ -36,6 +43,7 @@ export default async function AppLayout({ children }: AppLayoutProps) {
           slug: activeOrg.slug,
           name: activeOrg.name,
           plan: activeOrg.plan,
+          ssoActive,
         }}
         availableOrgs={orgs.map((o) => ({
           id: o.id,

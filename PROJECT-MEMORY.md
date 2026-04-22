@@ -324,7 +324,7 @@ src/lib/
 
 ### Phase 7: Enterprise Tier — SSO + Audit Export + Observability
 
-**Status:** `PENDING`
+**Status:** `COMPLETE` (v0.8.0-phase7) — Gemini whole-repo audit still deferred (credits)
 **Goal:** WorkOS SAML/SCIM for Enterprise plan, audit export, OTel dashboards.
 
 #### Dispatch Brief

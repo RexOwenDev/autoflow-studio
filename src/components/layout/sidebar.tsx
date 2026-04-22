@@ -6,9 +6,13 @@ import {
   Check,
   ChevronDown,
   CreditCard,
+  Crown,
+  Download,
+  KeyRound,
   LayoutDashboard,
   ScrollText,
   Settings,
+  ShieldCheck,
   Workflow,
   Zap,
 } from "lucide-react";
@@ -28,7 +32,14 @@ const navItems = [
 
 const bottomItems = [
   { label: "Audit Log", href: "/audit", icon: ScrollText, planRequired: "Pro" as const },
+  { label: "Audit Export", href: "/settings/audit", icon: Download, planRequired: "Pro" as const },
   { label: "Members", href: "/settings/members", icon: Settings },
+  {
+    label: "SSO & SCIM",
+    href: "/settings/sso",
+    icon: KeyRound,
+    planRequired: "Enterprise" as const,
+  },
   { label: "Usage & Billing", href: "/settings/billing", icon: CreditCard },
 ] as const;
 
@@ -37,6 +48,7 @@ interface SidebarOrg {
   slug: string;
   name: string;
   plan: string;
+  ssoActive?: boolean;
 }
 
 interface SidebarUser {
@@ -83,6 +95,15 @@ export function Sidebar({ activeOrg, availableOrgs, user }: SidebarProps) {
             {activeOrg.name.charAt(0).toUpperCase()}
           </div>
           <span className="flex-1 text-left truncate font-medium text-sm">{activeOrg.name}</span>
+          {activeOrg.plan === "enterprise" && (
+            <Crown className="w-3 h-3 text-[var(--brand)] shrink-0" aria-label="Enterprise plan" />
+          )}
+          {activeOrg.ssoActive && (
+            <ShieldCheck
+              className="w-3 h-3 text-[var(--success)] shrink-0"
+              aria-label="SSO active"
+            />
+          )}
           <ChevronDown
             className={cn(
               "w-3.5 h-3.5 text-[var(--foreground-muted)] shrink-0 transition-transform",
