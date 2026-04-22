@@ -1,0 +1,36 @@
+# CODEOWNERS — AutoFlow Studio
+# All listed paths require review from @RexOwenDev before merge.
+# Security-critical paths are marked with a comment.
+
+# Default: all files require review
+*                                   @RexOwenDev
+
+# [SECURITY] RLS migrations — any change to row-level security policies
+supabase/migrations/                @RexOwenDev
+
+# [SECURITY] Auth middleware — session guards, org-scope enforcement
+src/middleware.ts                   @RexOwenDev
+src/lib/auth/                       @RexOwenDev
+
+# [SECURITY] Webhook receivers — HMAC verify, idempotency, replay protection
+src/app/api/webhooks/               @RexOwenDev
+
+# [SECURITY] Billing — Stripe secret handling, signature verification
+src/lib/stripe/                     @RexOwenDev
+
+# [SECURITY] Adapter interfaces — gateway to all external SDKs
+src/lib/n8n/adapter.ts              @RexOwenDev
+src/lib/supabase/adapter.ts         @RexOwenDev
+src/lib/stripe/adapter.ts           @RexOwenDev
+
+# [SECURITY] Enterprise SSO — WorkOS SAML/SCIM
+src/lib/workos/                     @RexOwenDev
+src/app/api/auth/sso/               @RexOwenDev
+
+# [SECURITY] CI/CD — pipeline definitions
+.github/                            @RexOwenDev
+
+# Governance docs
+SECURITY.md                         @RexOwenDev
+docs/threat-model.md                @RexOwenDev
+CODEOWNERS                          @RexOwenDev
