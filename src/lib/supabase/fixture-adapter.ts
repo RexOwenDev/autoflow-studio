@@ -6,6 +6,7 @@ import type {
   Execution,
   ExecutionEvent,
   Organization,
+  OrganizationInvite,
   OrganizationMember,
   Workflow,
 } from "@/types/database";
@@ -14,6 +15,7 @@ import {
   FIXTURE_AUDIT_EVENTS,
   FIXTURE_EXECUTION_EVENTS,
   FIXTURE_EXECUTIONS,
+  FIXTURE_INVITES,
   FIXTURE_MEMBERS,
   FIXTURE_ORGS,
   FIXTURE_SUBSCRIPTIONS,
@@ -44,6 +46,12 @@ export function createFixtureAdapter(): SupabaseAdapter {
 
     async listMembers(organizationId: string): Promise<OrganizationMember[]> {
       return FIXTURE_MEMBERS.filter((m) => m.organization_id === organizationId);
+    },
+
+    async listPendingInvites(organizationId: string): Promise<OrganizationInvite[]> {
+      return FIXTURE_INVITES.filter(
+        (i) => i.organization_id === organizationId && i.status === "pending",
+      );
     },
 
     async listWorkflows(organizationId: string): Promise<Workflow[]> {

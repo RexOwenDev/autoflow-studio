@@ -1,6 +1,6 @@
 import "server-only";
 import { getSupabaseAdapter } from "@/lib/supabase/adapter";
-import type { Organization, OrganizationMember } from "@/types/database";
+import type { Organization, OrganizationInvite, OrganizationMember } from "@/types/database";
 
 export async function listOrganizationsForUser(userId: string): Promise<Organization[]> {
   return getSupabaseAdapter().listOrganizationsForUser(userId);
@@ -12,4 +12,8 @@ export async function getOrganizationBySlug(slug: string): Promise<Organization 
 
 export async function listMembers(organizationId: string): Promise<OrganizationMember[]> {
   return getSupabaseAdapter().listMembers(organizationId);
+}
+
+export async function listPendingInvites(organizationId: string): Promise<OrganizationInvite[]> {
+  return getSupabaseAdapter().listPendingInvites(organizationId);
 }

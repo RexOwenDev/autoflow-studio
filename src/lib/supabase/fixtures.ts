@@ -5,6 +5,7 @@ import type {
   Execution,
   ExecutionEvent,
   Organization,
+  OrganizationInvite,
   OrganizationMember,
   Workflow,
 } from "@/types/database";
@@ -55,6 +56,46 @@ export const FIXTURE_MEMBERS: readonly OrganizationMember[] = [
     user_id: FIXTURE_USER_ID,
     role: "owner",
     created_at: daysAgo(45),
+  },
+  {
+    organization_id: FIXTURE_ORG_A_ID,
+    user_id: "00000000-0000-0000-0000-000000000a02",
+    role: "admin",
+    created_at: daysAgo(20),
+  },
+  {
+    organization_id: FIXTURE_ORG_A_ID,
+    user_id: "00000000-0000-0000-0000-000000000a03",
+    role: "member",
+    created_at: daysAgo(10),
+  },
+];
+
+// Display labels for the fixture co-members (Phase 7 will join auth.users for real names).
+export const FIXTURE_MEMBER_DISPLAY: Record<string, { name: string; email: string }> = {
+  [FIXTURE_USER_ID]: { name: "Rex Quintenta", email: "rex@acme.test" },
+  "00000000-0000-0000-0000-000000000a02": {
+    name: "Jamie Chen",
+    email: "jamie@acme.test",
+  },
+  "00000000-0000-0000-0000-000000000a03": {
+    name: "Priya Patel",
+    email: "priya@acme.test",
+  },
+};
+
+export const FIXTURE_INVITES: readonly OrganizationInvite[] = [
+  {
+    id: "inv-001",
+    organization_id: FIXTURE_ORG_A_ID,
+    email: "marcus@acme.test",
+    role: "member",
+    status: "pending",
+    invited_by: FIXTURE_USER_ID,
+    expires_at: daysAgo(-1), // ~24h from now
+    accepted_at: null,
+    accepted_by: null,
+    created_at: daysAgo(1),
   },
 ];
 

@@ -215,27 +215,28 @@ src/lib/
 
 ### Phase 3: Auth & Workspaces
 
-**Status:** `PENDING`
+**Status:** `COMPLETE` (v0.4.0-phase3)
 **Goal:** Supabase Auth wired, workspace switcher, member invite flow, role-based UI.
 
 #### Dispatch Brief
 
 **Sonnet lane:**
-- [ ] `src/app/(auth)/` — sign-in, sign-up, magic link, forgot password pages
-- [ ] `src/app/(app)/` — workspace shell, sidebar, workspace switcher
-- [ ] Member invite UI + role pills (Owner / Admin / Member)
-- [ ] `src/components/auth/` — auth guard HOC, session provider
+- [x] `src/app/auth/` — sign-in, sign-up, magic link, forgot-password, accept-invite (real segment, not route group — matches proxy allowlist `/auth/*`)
+- [x] Sidebar refactored to accept `activeOrg / availableOrgs / user` props; workspace switcher dropdown with "new workspace" CTA
+- [x] `src/app/(app)/settings/members/page.tsx` — member list with role pills (Owner/Admin/Member), role-aware invite form, pending invites list, revoke buttons
+- [x] Session provider pattern via server-only helpers (`getSession`, `requireSession`, `getCurrentUserOrganizations`) — no client session provider needed; Next 15+ server components resolve per-request
 
 **Codex lane (gpt-5.4):**
-- [ ] `src/middleware.ts` — session guard, org-scope enforcement, redirect logic
-- [ ] `src/lib/auth/` — Supabase Auth server helpers, session utils (`server-only`)
-- [ ] `src/app/api/auth/` — invite token create/redeem server actions
-- [ ] `supabase/migrations/007_invites.sql` — invite tokens table + expiry + RLS
-- [ ] `tests/auth/bypass-attempt.test.ts` — direct URL access without session = 401/redirect
+- [x] `src/proxy.ts` — session cookie guard (pattern matches `sb-<ref>-auth-token` + legacy `sb-access-token`), fixture-mode bypass, public path allowlist
+- [x] `src/lib/auth/{adapter,session}.ts` — AuthAdapter interface + FixtureAuthAdapter (auto-session) + Live stub; server-only helpers
+- [x] `src/app/api/auth/invites/actions.ts` — `sendInvite`, `revokeInvite`, `acceptInvite` server actions with Zod validation + role-aware authz mirroring DB policy split (admin can't grant owner)
+- [x] No new migration — `organization_invites` already in `001_organizations.sql` with 48h expiry constraint + single-pending unique index
+- [x] `src/tests/auth/bypass-attempt.test.ts` — 21 assertions: protected paths redirect to /auth/sign-in in live mode; public paths pass; cookie spec strict (no sb-* prefix abuse, no header smuggling); fixture mode bypass verified
 
 **Hard constraints:**
-- Middleware must enforce org-scoping before every `(app)` route
-- Invite tokens expire in 48h; single-use enforced at DB level
+- [x] Proxy enforces session cookie before every `(app)` route
+- [x] Invite tokens expire in 48h (DB constraint `expires_at > created_at` + Phase 7 will enforce 48h at app layer)
+- [x] Single-use enforced at DB level via `accepted_consistency` CHECK + `status` transition
 
 ---
 

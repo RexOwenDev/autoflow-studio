@@ -3,6 +3,7 @@
 import {
   Activity,
   BookTemplate,
+  Check,
   ChevronDown,
   CreditCard,
   LayoutDashboard,
@@ -13,62 +14,53 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import * as React from "react";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 
 const navItems = [
-  {
-    label: "Dashboard",
-    href: "/dashboard",
-    icon: LayoutDashboard,
-  },
-  {
-    label: "Executions",
-    href: "/executions",
-    icon: Activity,
-    badge: "Live",
-  },
-  {
-    label: "Workflows",
-    href: "/workflows",
-    icon: Workflow,
-  },
-  {
-    label: "Templates",
-    href: "/templates",
-    icon: BookTemplate,
-  },
+  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  { label: "Executions", href: "/executions", icon: Activity, badge: "Live" },
+  { label: "Workflows", href: "/workflows", icon: Workflow },
+  { label: "Templates", href: "/templates", icon: BookTemplate },
 ] as const;
 
 const bottomItems = [
-  {
-    label: "Audit Log",
-    href: "/audit",
-    icon: ScrollText,
-    planRequired: "Pro" as const,
-  },
-  {
-    label: "Usage & Billing",
-    href: "/settings/billing",
-    icon: CreditCard,
-  },
-  {
-    label: "Settings",
-    href: "/settings",
-    icon: Settings,
-  },
+  { label: "Audit Log", href: "/audit", icon: ScrollText, planRequired: "Pro" as const },
+  { label: "Members", href: "/settings/members", icon: Settings },
+  { label: "Usage & Billing", href: "/settings/billing", icon: CreditCard },
 ] as const;
 
-export function Sidebar() {
+interface SidebarOrg {
+  id: string;
+  slug: string;
+  name: string;
+  plan: string;
+}
+
+interface SidebarUser {
+  displayName: string;
+  email: string;
+  initials: string;
+  planLabel: string;
+}
+
+export interface SidebarProps {
+  activeOrg: SidebarOrg;
+  availableOrgs: readonly SidebarOrg[];
+  user: SidebarUser;
+}
+
+export function Sidebar({ activeOrg, availableOrgs, user }: SidebarProps) {
   const pathname = usePathname();
+  const [switcherOpen, setSwitcherOpen] = React.useState(false);
 
   return (
     <aside
       className="flex flex-col w-[var(--sidebar-width)] shrink-0 border-r border-[var(--border)] bg-[var(--background-subtle)] h-full"
       aria-label="Main navigation"
     >
-      {/* Logo / brand */}
       <div className="flex items-center gap-2.5 px-4 h-[var(--header-height)] border-b border-[var(--border-subtle)] shrink-0">
         <div className="flex items-center justify-center w-7 h-7 rounded-[var(--radius)] bg-[var(--brand)]">
           <Zap className="w-4 h-4 text-white" />
@@ -78,24 +70,73 @@ export function Sidebar() {
         </span>
       </div>
 
-      {/* Workspace switcher */}
-      <div className="px-3 pt-3 pb-2 shrink-0">
+      <div className="px-3 pt-3 pb-2 shrink-0 relative">
         <button
           type="button"
+          onClick={() => setSwitcherOpen((v) => !v)}
           className="flex items-center gap-2 w-full px-2 py-1.5 rounded-[var(--radius)] text-sm text-[var(--foreground)] hover:bg-[var(--surface-raised)] transition-colors"
           aria-label="Switch workspace"
+          aria-expanded={switcherOpen}
+          aria-haspopup="menu"
         >
           <div className="flex items-center justify-center w-5 h-5 rounded text-xs font-bold bg-[var(--brand-subtle)] text-[var(--brand)] shrink-0">
-            A
+            {activeOrg.name.charAt(0).toUpperCase()}
           </div>
-          <span className="flex-1 text-left truncate font-medium text-sm">Acme Corp</span>
-          <ChevronDown className="w-3.5 h-3.5 text-[var(--foreground-muted)] shrink-0" />
+          <span className="flex-1 text-left truncate font-medium text-sm">{activeOrg.name}</span>
+          <ChevronDown
+            className={cn(
+              "w-3.5 h-3.5 text-[var(--foreground-muted)] shrink-0 transition-transform",
+              switcherOpen && "rotate-180",
+            )}
+          />
         </button>
+
+        {switcherOpen && availableOrgs.length > 0 && (
+          <div
+            role="menu"
+            className="absolute left-3 right-3 top-full mt-1 z-10 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--background)] shadow-[var(--shadow-md)] py-1"
+          >
+            {availableOrgs.map((org) => {
+              const isActive = org.id === activeOrg.id;
+              return (
+                <Link
+                  key={org.id}
+                  href={`/dashboard?org=${org.slug}`}
+                  onClick={() => setSwitcherOpen(false)}
+                  role="menuitem"
+                  className={cn(
+                    "flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-[var(--surface-raised)] transition-colors",
+                    isActive && "bg-[var(--brand-subtle)]",
+                  )}
+                >
+                  <div className="flex items-center justify-center w-5 h-5 rounded text-xs font-bold bg-[var(--brand-subtle)] text-[var(--brand)] shrink-0">
+                    {org.name.charAt(0).toUpperCase()}
+                  </div>
+                  <span className="flex-1 truncate">{org.name}</span>
+                  <span className="text-[10px] text-[var(--foreground-subtle)] capitalize">
+                    {org.plan}
+                  </span>
+                  {isActive && <Check className="w-3.5 h-3.5 text-[var(--brand)]" />}
+                </Link>
+              );
+            })}
+            <div className="border-t border-[var(--border-subtle)] mt-1 pt-1">
+              <Link
+                href="/auth/sign-up"
+                onClick={() => setSwitcherOpen(false)}
+                role="menuitem"
+                className="flex items-center gap-2 px-3 py-1.5 text-sm text-[var(--foreground-muted)] hover:bg-[var(--surface-raised)] transition-colors"
+              >
+                <span className="text-base leading-none">+</span>
+                <span>New workspace</span>
+              </Link>
+            </div>
+          </div>
+        )}
       </div>
 
       <Separator className="mx-3 w-auto" />
 
-      {/* Primary nav */}
       <nav className="flex-1 overflow-y-auto px-3 py-2 space-y-0.5">
         {navItems.map((item) => {
           const Icon = item.icon;
@@ -126,7 +167,6 @@ export function Sidebar() {
 
       <Separator className="mx-3 w-auto" />
 
-      {/* Bottom nav */}
       <nav className="px-3 py-2 space-y-0.5 shrink-0">
         {bottomItems.map((item) => {
           const Icon = item.icon;
@@ -154,15 +194,16 @@ export function Sidebar() {
         })}
       </nav>
 
-      {/* User avatar placeholder */}
       <div className="px-3 py-3 border-t border-[var(--border-subtle)] shrink-0">
         <div className="flex items-center gap-2.5 px-2 py-1.5 rounded-[var(--radius)] hover:bg-[var(--surface-raised)] cursor-pointer transition-colors">
           <div className="flex items-center justify-center w-7 h-7 rounded-full bg-[var(--surface-raised)] border border-[var(--border)] text-xs font-medium text-[var(--foreground-muted)] shrink-0">
-            RQ
+            {user.initials}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-medium text-[var(--foreground)] truncate">Rex Quintenta</p>
-            <p className="text-xs text-[var(--foreground-subtle)] truncate">Pro plan</p>
+            <p className="text-xs font-medium text-[var(--foreground)] truncate">
+              {user.displayName}
+            </p>
+            <p className="text-xs text-[var(--foreground-subtle)] truncate">{user.planLabel}</p>
           </div>
         </div>
       </div>

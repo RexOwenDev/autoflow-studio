@@ -3,11 +3,11 @@ import type { Metadata } from "next";
 import { StatItem, StatsBar } from "@/components/layout/stats-bar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { requireSession } from "@/lib/auth/session";
 import { listAuditEvents } from "@/lib/db/audit";
 import { getSubscriptionForMember } from "@/lib/db/billing";
 import { getExecutionStats, listExecutions } from "@/lib/db/executions";
 import { listWorkflows } from "@/lib/db/workflows";
-import { FIXTURE_ORG_A_ID } from "@/lib/supabase/fixtures";
 import type { ExecutionStatus } from "@/types/database";
 
 export const metadata: Metadata = { title: "Dashboard" };
@@ -45,8 +45,8 @@ function formatRelative(iso: string | null, now: Date): string {
 }
 
 export default async function DashboardPage() {
-  // Phase 2: org context comes from fixtures. Phase 3 will resolve from session.
-  const orgId = FIXTURE_ORG_A_ID;
+  const session = await requireSession("/dashboard");
+  const orgId = session.activeOrganizationId;
   // Audit log is admin-only post-Codex-fix; the dashboard widget will tolerate an empty
   // result for member-tier users. Phase 5 surfaces a redacted member-safe audit feed.
   const [executions, stats, workflows, subscription, recentAudit] = await Promise.all([

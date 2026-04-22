@@ -7,6 +7,7 @@ import type {
   Execution,
   ExecutionEvent,
   Organization,
+  OrganizationInvite,
   OrganizationMember,
   Workflow,
 } from "@/types/database";
@@ -32,6 +33,7 @@ export interface SupabaseAdapter {
   listOrganizationsForUser(userId: string): Promise<Organization[]>;
   getOrganizationBySlug(slug: string): Promise<Organization | null>;
   listMembers(organizationId: string): Promise<OrganizationMember[]>;
+  listPendingInvites(organizationId: string): Promise<OrganizationInvite[]>;
 
   // --- workflows ---------------------------------------------------------
   listWorkflows(organizationId: string): Promise<Workflow[]>;
