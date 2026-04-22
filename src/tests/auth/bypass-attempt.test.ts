@@ -116,6 +116,7 @@ describe("proxy auth enforcement", () => {
     // ===== PUBLIC PATHS — never blocked =====================================
     it.each([
       ["/", "marketing root"],
+      ["/pricing", "public pricing page"],
       ["/auth/sign-in", "sign-in page"],
       ["/auth/sign-up", "sign-up page"],
       ["/auth/magic-link", "magic-link page"],

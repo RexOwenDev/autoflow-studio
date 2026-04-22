@@ -295,7 +295,7 @@ src/lib/
 
 ### Phase 6: Stripe Billing
 
-**Status:** `PENDING`
+**Status:** `COMPLETE` (v0.7.0-phase6)
 **Goal:** Metered execution billing, plan tiers, fixture-only (no live keys).
 
 #### Dispatch Brief

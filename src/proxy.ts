@@ -23,6 +23,7 @@ import { type NextRequest, NextResponse } from "next/server";
 const PUBLIC_PATHS: RegExp[] = [
   /^\/$/,
   /^\/auth(\/.*)?$/,
+  /^\/pricing$/,
   /^\/api\/webhooks(\/.*)?$/,
   /^\/_next(\/.*)?$/,
   /^\/favicon\.ico$/,
