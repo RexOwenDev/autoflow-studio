@@ -61,10 +61,24 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
       - run: npm ci
+      # Skip when no spec files exist (Playwright's "No tests found" exits 1).
+      # E2E specs land in a follow-on phase; the config + browser install stays wired so
+      # the first spec lights up CI automatically.
+      - name: Check for Playwright specs
+        id: has_specs
+        run: |
+          if find src/tests/e2e -name "*.spec.ts" -o -name "*.test.ts" 2>/dev/null | grep -q .; then
+            echo "specs=true" >> $GITHUB_OUTPUT
+          else
+            echo "specs=false" >> $GITHUB_OUTPUT
+            echo "::notice::No Playwright specs found under src/tests/e2e — skipping run"
+          fi
       - run: npx playwright install --with-deps chromium
+        if: steps.has_specs.outputs.specs == 'true'
       - run: npm run test:e2e
+        if: steps.has_specs.outputs.specs == 'true'
       - uses: actions/upload-artifact@v4
-        if: failure()
+        if: failure() && steps.has_specs.outputs.specs == 'true'
         with:
           name: playwright-report
           path: playwright-report/
