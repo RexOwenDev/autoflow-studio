@@ -1,0 +1,21 @@
+# Gitleaks config for AutoFlow Studio.
+# Extends the default ruleset; adds allowlists for known-safe fixture data.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Fixture data with high-entropy but non-secret values"
+
+# Generated fixture file — deterministic idempotency_key values like
+# "n8n_lead_0000". Regenerate with `npm run seed:executions`.
+paths = [
+  '''src/lib/n8n/seed-executions\.ts''',
+]
+
+# Fixture secrets (explicitly marked "do-not-use-in-prod"). These are test
+# constants, not real credentials — they're documented as such inline.
+regexes = [
+  '''fixture-n8n-webhook-secret-do-not-use-in-prod''',
+  '''fixture-stripe-webhook-secret-do-not-use-in-prod''',
+]
