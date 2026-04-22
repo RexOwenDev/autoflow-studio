@@ -242,7 +242,7 @@ src/lib/
 
 ### Phase 4: Workflow Templates + Configuration
 
-**Status:** `PENDING`
+**Status:** `COMPLETE` (v0.5.0-phase4)
 **Goal:** Template gallery, JSON-schema config forms, 5 fixture templates.
 
 #### Dispatch Brief

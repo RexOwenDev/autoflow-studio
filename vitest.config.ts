@@ -20,6 +20,10 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      // In Next.js, `server-only` throws at bundle time if imported from a client
+      // component. In vitest it's a no-op shim — tests run in node and can import
+      // server-only modules freely.
+      "server-only": path.resolve(__dirname, "./src/tests/shims/server-only.ts"),
     },
   },
 });
