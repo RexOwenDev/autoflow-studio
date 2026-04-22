@@ -75,6 +75,9 @@
           },
           "correctness": {
             "noUnusedVariables": "off"
+          },
+          "suspicious": {
+            "noConsole": "off"
           }
         }
       }

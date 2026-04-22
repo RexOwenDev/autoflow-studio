@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+
 /**
  * Capture marketing/portfolio screenshots of fixture-mode AutoFlow Studio.
  *
@@ -6,10 +7,10 @@
  * Run:     node scripts/capture-screenshots.mjs
  */
 
-import { chromium } from "playwright";
 import { mkdir } from "node:fs/promises";
-import { join, dirname } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { chromium } from "playwright";
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const OUT = join(ROOT, "docs", "screenshots");
@@ -17,10 +18,18 @@ const OUT = join(ROOT, "docs", "screenshots");
 const PAGES = [
   { path: "/dashboard", name: "01-dashboard", label: "Dashboard" },
   { path: "/executions", name: "02-executions", label: "Executions list" },
-  { path: "/executions/ee000000000-lead-0000-0000-000000000000", name: "03-execution-detail", label: "Execution detail" },
+  {
+    path: "/executions/ee000000000-lead-0000-0000-000000000000",
+    name: "03-execution-detail",
+    label: "Execution detail",
+  },
   { path: "/templates", name: "04-templates-gallery", label: "Templates gallery" },
   { path: "/templates/slack-notifier", name: "05-template-detail", label: "Template detail" },
-  { path: "/workflows/new?template=slack-notifier", name: "06-workflow-config", label: "Workflow configure" },
+  {
+    path: "/workflows/new?template=slack-notifier",
+    name: "06-workflow-config",
+    label: "Workflow configure",
+  },
   { path: "/settings/members", name: "07-members", label: "Members" },
   { path: "/settings/billing", name: "08-billing", label: "Billing" },
   { path: "/settings/sso", name: "09-sso", label: "SSO (Enterprise gate)" },
