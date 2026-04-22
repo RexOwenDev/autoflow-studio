@@ -3,31 +3,67 @@ import type { Metadata } from "next";
 import { StatItem, StatsBar } from "@/components/layout/stats-bar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { listAuditEvents } from "@/lib/db/audit";
+import { getSubscription } from "@/lib/db/billing";
+import { getExecutionStats, listExecutions } from "@/lib/db/executions";
+import { listWorkflows } from "@/lib/db/workflows";
+import { FIXTURE_ORG_A_ID } from "@/lib/supabase/fixtures";
+import type { ExecutionStatus } from "@/types/database";
 
 export const metadata: Metadata = { title: "Dashboard" };
 
-const recentRuns = [
-  { id: "run_001", workflow: "Lead Capture", status: "success", duration: "1.2s", ts: "2m ago" },
-  { id: "run_002", workflow: "Slack Notifier", status: "success", duration: "0.8s", ts: "5m ago" },
-  { id: "run_003", workflow: "Daily Digest", status: "failed", duration: "3.1s", ts: "12m ago" },
-  {
-    id: "run_004",
-    workflow: "Webhook-to-Email",
-    status: "success",
-    duration: "2.4s",
-    ts: "18m ago",
-  },
-  { id: "run_005", workflow: "CSV-to-Sheets", status: "retrying", duration: "—", ts: "21m ago" },
-];
-
-const statusVariant = (s: string) => {
-  if (s === "success") return "success" as const;
-  if (s === "failed") return "destructive" as const;
-  if (s === "retrying") return "warning" as const;
-  return "secondary" as const;
+const PLAN_LIMITS: Record<string, number> = {
+  free: 100,
+  pro: 10_000,
+  enterprise: Number.POSITIVE_INFINITY,
 };
 
-export default function DashboardPage() {
+function statusVariant(s: ExecutionStatus) {
+  if (s === "success") return "success" as const;
+  if (s === "failed") return "destructive" as const;
+  if (s === "retrying" || s === "queued") return "warning" as const;
+  if (s === "cancelled") return "secondary" as const;
+  return "info" as const;
+}
+
+function formatDuration(ms: number | null): string {
+  if (ms === null) return "—";
+  if (ms < 1000) return `${ms}ms`;
+  return `${(ms / 1000).toFixed(1)}s`;
+}
+
+function formatRelative(iso: string | null, now: Date): string {
+  if (!iso) return "—";
+  const diffMs = now.getTime() - new Date(iso).getTime();
+  const minutes = Math.round(diffMs / 60_000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.round(hours / 24);
+  return `${days}d ago`;
+}
+
+export default async function DashboardPage() {
+  // Phase 2: org context comes from fixtures. Phase 3 will resolve from session.
+  const orgId = FIXTURE_ORG_A_ID;
+  const [executions, stats, workflows, subscription, recentAudit] = await Promise.all([
+    listExecutions(orgId, 5),
+    getExecutionStats(orgId),
+    listWorkflows(orgId),
+    getSubscription(orgId),
+    listAuditEvents(orgId, 1),
+  ]);
+
+  const workflowsById = new Map(workflows.map((w) => [w.id, w]));
+  const activeCount = workflows.filter((w) => w.status === "active").length;
+  const planLimit = subscription ? (PLAN_LIMITS[subscription.plan] ?? 0) : 0;
+  const usage = subscription?.metered_usage_current ?? 0;
+  const usagePct = planLimit === Number.POSITIVE_INFINITY ? 0 : (usage / planLimit) * 100;
+  const planLabel = subscription?.plan ?? "free";
+  const successRatePct = (stats.successRate * 100).toFixed(1);
+  const now = new Date();
+
   return (
     <div className="flex flex-col flex-1 overflow-auto">
       {/* Header */}
@@ -38,13 +74,18 @@ export default function DashboardPage() {
 
       {/* Stats bar */}
       <StatsBar>
-        <StatItem label="Total runs today" value="247" icon={Activity} trend="up" />
+        <StatItem label="Total runs" value={stats.total} icon={Activity} trend="up" />
         <div className="w-px h-6 bg-[var(--border)]" />
-        <StatItem label="Success rate" value="96.8%" icon={CheckCircle2} trend="up" />
+        <StatItem
+          label="Success rate"
+          value={`${successRatePct}%`}
+          icon={CheckCircle2}
+          trend="up"
+        />
         <div className="w-px h-6 bg-[var(--border)]" />
-        <StatItem label="Failures" value="8" icon={XCircle} trend="down" />
+        <StatItem label="Failures" value={stats.failed} icon={XCircle} trend="down" />
         <div className="w-px h-6 bg-[var(--border)]" />
-        <StatItem label="Active workflows" value="5" icon={Workflow} />
+        <StatItem label="Active workflows" value={activeCount} icon={Workflow} />
       </StatsBar>
 
       {/* Content */}
@@ -53,32 +94,37 @@ export default function DashboardPage() {
         <Card className="xl:col-span-2">
           <CardHeader>
             <CardTitle>Recent Executions</CardTitle>
-            <CardDescription>Last 5 automation runs across all workflows</CardDescription>
+            <CardDescription>
+              Last {executions.length} runs · {recentAudit[0]?.action ?? "no audit events"}
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              {recentRuns.map((run) => (
-                <div
-                  key={run.id}
-                  className="flex items-center gap-3 py-2 border-b border-[var(--border-subtle)] last:border-0"
-                >
-                  <Badge
-                    variant={statusVariant(run.status)}
-                    className="capitalize w-20 justify-center"
+              {executions.map((run) => {
+                const workflow = workflowsById.get(run.workflow_id);
+                return (
+                  <div
+                    key={run.id}
+                    className="flex items-center gap-3 py-2 border-b border-[var(--border-subtle)] last:border-0"
                   >
-                    {run.status}
-                  </Badge>
-                  <span className="flex-1 text-sm font-medium text-[var(--foreground)] truncate">
-                    {run.workflow}
-                  </span>
-                  <span className="text-xs text-[var(--foreground-muted)] font-mono">
-                    {run.duration}
-                  </span>
-                  <span className="text-xs text-[var(--foreground-subtle)] w-14 text-right">
-                    {run.ts}
-                  </span>
-                </div>
-              ))}
+                    <Badge
+                      variant={statusVariant(run.status)}
+                      className="capitalize w-20 justify-center"
+                    >
+                      {run.status}
+                    </Badge>
+                    <span className="flex-1 text-sm font-medium text-[var(--foreground)] truncate">
+                      {workflow?.name ?? run.workflow_id}
+                    </span>
+                    <span className="text-xs text-[var(--foreground-muted)] font-mono">
+                      {formatDuration(run.duration_ms)}
+                    </span>
+                    <span className="text-xs text-[var(--foreground-subtle)] w-14 text-right">
+                      {formatRelative(run.started_at, now)}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           </CardContent>
         </Card>
@@ -87,24 +133,33 @@ export default function DashboardPage() {
         <Card>
           <CardHeader>
             <CardTitle>Plan Usage</CardTitle>
-            <CardDescription>Pro · Resets in 8 days</CardDescription>
+            <CardDescription className="capitalize">
+              {planLabel} · {subscription?.status ?? "no subscription"}
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
               <div>
                 <div className="flex justify-between text-xs mb-1.5">
                   <span className="text-[var(--foreground-muted)]">Executions</span>
-                  <span className="text-[var(--foreground)] font-medium">247 / 10,000</span>
+                  <span className="text-[var(--foreground)] font-medium">
+                    {usage.toLocaleString()} /{" "}
+                    {planLimit === Number.POSITIVE_INFINITY
+                      ? "unlimited"
+                      : planLimit.toLocaleString()}
+                  </span>
                 </div>
                 <div className="h-2 rounded-full bg-[var(--surface-raised)] overflow-hidden">
                   <div
                     className="h-full rounded-full bg-[var(--brand)] transition-all"
-                    style={{ width: "2.47%" }}
+                    style={{ width: `${Math.min(100, usagePct).toFixed(2)}%` }}
                   />
                 </div>
               </div>
               <div className="flex items-center justify-between pt-2 border-t border-[var(--border-subtle)]">
-                <Badge variant="default">Pro</Badge>
+                <Badge variant="default" className="capitalize">
+                  {planLabel}
+                </Badge>
                 <TrendingUp className="w-4 h-4 text-[var(--success)]" />
               </div>
             </div>

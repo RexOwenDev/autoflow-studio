@@ -135,7 +135,7 @@ src/lib/
 
 ### Phase 1: Foundation
 
-**Status:** `PENDING`
+**Status:** `COMPLETE` (v0.2.0-phase1)
 **Goal:** Next.js 16 scaffold, CI, OTel, design tokens, layout shell.
 
 #### Dispatch Brief
@@ -175,25 +175,27 @@ src/lib/
 
 ### Phase 2: Multi-Tenant Schema + RLS
 
-**Status:** `PENDING`
+**Status:** `IMPLEMENTATION COMPLETE — awaiting council gate (Gemini RLS + Codex adversarial)` (v0.3.0-phase2)
 **Goal:** Full Postgres schema with RLS. Cross-tenant access provably denied.
 
 #### Dispatch Brief
 
 **Codex lane (gpt-5.4 — security-critical):**
-- [ ] `supabase/migrations/001_organizations.sql` — org + org_members + invites + RLS
-- [ ] `supabase/migrations/002_workflows.sql` — workflows + workflow_versions + RLS
-- [ ] `supabase/migrations/003_executions.sql` — executions + execution_events + RLS
-- [ ] `supabase/migrations/004_webhook_inbox.sql` — webhook_inbox + replay_guard + RLS
-- [ ] `supabase/migrations/005_audit_events.sql` — audit_events (append-only) + RLS
-- [ ] `supabase/migrations/006_billing.sql` — billing_subscriptions + webhook_events + RLS
-- [ ] `tests/rls/cross-tenant-denial.test.ts` — pgTAP: 3 tenants, prove A cannot read B
-- [ ] `tests/rls/append-only-audit.test.ts` — prove UPDATE/DELETE on audit_events denied
+- [x] `supabase/migrations/001_organizations.sql` — org + org_members + invites + RLS (EXISTS pattern, helper fns is_organization_member + has_organization_role)
+- [x] `supabase/migrations/002_workflows.sql` — workflows + workflow_versions (versions append-only)
+- [x] `supabase/migrations/003_executions.sql` — executions + execution_events + idempotency unique idx
+- [x] `supabase/migrations/004_webhook_inbox.sql` — webhook_inbox + idempotency unique + replay window column
+- [x] `supabase/migrations/005_audit_events.sql` — append-only triggers (UPDATE + DELETE + TRUNCATE all blocked, REVOKE belt-and-braces)
+- [x] `supabase/migrations/006_billing.sql` — billing_subscriptions + webhook_events idempotency ledger
+- [x] `supabase/tests/rls/cross-tenant-denial.test.sql` — pgTAP, 3 tenants, 18 assertions
+- [x] `supabase/tests/rls/append-only-audit.test.sql` — pgTAP, 7 assertions including TRUNCATE
 
 **Sonnet lane:**
-- [ ] `src/lib/supabase/adapter.ts` — PGliteAdapter + LiveSupabaseAdapter
-- [ ] `src/types/database.ts` — generated DB types (Supabase CLI)
-- [ ] `src/lib/db/` — org, workflow, execution, audit query helpers (`server-only`)
+- [x] `src/lib/supabase/adapter.ts` — interface + factory; live throws (Phase 3 wires @supabase/ssr)
+- [x] `src/lib/supabase/fixture-adapter.ts` + `fixtures.ts` — deterministic in-memory data, 2 orgs (Acme + Beta-empty proves isolation)
+- [x] `src/types/database.ts` — hand-authored row types matching migrations
+- [x] `src/lib/db/` — orgs, workflows, executions, audit, billing query helpers with `server-only` guard
+- [x] Dashboard rewired to use real data layer via Promise.all parallel fetches
 
 **Integration:** Codex schema → Sonnet types generated → Sonnet query helpers use types.
 
