@@ -6,8 +6,7 @@ on:
   pull_request:
     branches: [main]
   schedule:
-    # Weekly full scan on Mondays at 08:00 UTC
-    - cron: '0 8 * * 1'
+    - cron: "0 8 * * 1"
 
 jobs:
   secrets-scan:
@@ -26,12 +25,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v3
-        with:
-          version: 9
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm audit --audit-level=high
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      # Gemini audit: upgraded from --audit-level=high to moderate
+      - run: npm audit --audit-level=moderate

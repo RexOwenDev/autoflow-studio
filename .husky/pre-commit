@@ -1,0 +1,15 @@
+#!/usr/bin/env sh
+# AutoFlow Studio pre-commit hook
+
+# 1. Secret detection (Gemini HIGH fix — catch secrets before they leave the machine)
+if command -v gitleaks >/dev/null 2>&1; then
+  gitleaks protect --staged --no-banner --exit-code 1 || {
+    echo "gitleaks: secret detected in staged files. Commit blocked."
+    exit 1
+  }
+else
+  echo "WARNING: gitleaks not installed — CI will catch it. Install: https://github.com/gitleaks/gitleaks"
+fi
+
+# 2. Biome lint + format on staged files
+npx lint-staged
