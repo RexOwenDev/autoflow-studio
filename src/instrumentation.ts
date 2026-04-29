@@ -3,13 +3,25 @@ import { registerOTel } from "@vercel/otel";
 import { selectExporterKind } from "@/lib/otel/exporter-factory";
 import { buildSampler } from "@/lib/otel/sampling";
 
-/**
- * Next.js instrumentation entry point (otel-nextjs pattern).
- * OTel failure is non-fatal — we log and continue serving.
- * Fixture adapters are NOT instrumented (they have no network latency to measure).
- */
-export function register(): void {
-  // Never instrument in fixture mode — no real spans to collect
+export async function register(): Promise<void> {
+  if (process.env.NEXT_RUNTIME === "nodejs" && process.env.SENTRY_DSN) {
+    const Sentry = await import("@sentry/nextjs");
+    Sentry.init({
+      dsn: process.env.SENTRY_DSN,
+      tracesSampleRate: process.env.NODE_ENV === "production" ? 0.1 : 1.0,
+      environment: process.env.VERCEL_ENV ?? process.env.NODE_ENV,
+    });
+  }
+
+  if (process.env.NEXT_RUNTIME === "edge" && process.env.SENTRY_DSN) {
+    const Sentry = await import("@sentry/nextjs");
+    Sentry.init({
+      dsn: process.env.SENTRY_DSN,
+      tracesSampleRate: process.env.NODE_ENV === "production" ? 0.1 : 1.0,
+      environment: process.env.VERCEL_ENV ?? process.env.NODE_ENV,
+    });
+  }
+
   if (process.env.APP_MODE === "fixture") return;
 
   const kind = selectExporterKind(process.env.NODE_ENV);
@@ -31,4 +43,13 @@ export function register(): void {
       traceSampler: buildSampler(process.env.NODE_ENV),
     });
   } catch (_err) {}
+}
+
+export async function onRequestError(
+  ...args: Parameters<typeof import("@sentry/nextjs").captureRequestError>
+) {
+  if (process.env.SENTRY_DSN) {
+    const Sentry = await import("@sentry/nextjs");
+    Sentry.captureRequestError(...args);
+  }
 }

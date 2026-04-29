@@ -1,8 +1,7 @@
+import { withSentryConfig } from "@sentry/nextjs";
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // instrumentationHook: enabled by default in Next.js 15+ (no config needed)
-  // Security headers applied to all routes
   async headers() {
     return [
       {
@@ -20,11 +19,12 @@ const nextConfig: NextConfig = {
             key: "Content-Security-Policy",
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-inline'", // Relaxed for Next.js RSC inline scripts — tighten in Phase 7
+              "script-src 'self' 'unsafe-inline' https://us-assets.i.posthog.com https://eu-assets.i.posthog.com",
               "style-src 'self' 'unsafe-inline'",
-              "img-src 'self' data: blob:",
+              "img-src 'self' data: blob: https://*.loom.com",
               "font-src 'self'",
-              "connect-src 'self'",
+              "connect-src 'self' https://*.i.posthog.com https://*.ingest.sentry.io https://*.ingest.us.sentry.io https://*.ingest.de.sentry.io",
+              "frame-src 'self' https://www.loom.com https://cal.com https://*.cal.com",
               "frame-ancestors 'none'",
             ].join("; "),
           },
@@ -34,4 +34,19 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+const sentryAuth = process.env.SENTRY_AUTH_TOKEN;
+const sentryOrg = process.env.SENTRY_ORG;
+const sentryProject = process.env.SENTRY_PROJECT;
+
+const sentryEnabled = Boolean(process.env.SENTRY_DSN && sentryAuth && sentryOrg && sentryProject);
+
+export default sentryEnabled
+  ? withSentryConfig(nextConfig, {
+      org: sentryOrg as string,
+      project: sentryProject as string,
+      authToken: sentryAuth as string,
+      silent: !process.env.CI,
+      widenClientFileUpload: true,
+      disableLogger: true,
+    })
+  : nextConfig;
