@@ -148,13 +148,6 @@ Full STRIDE analysis lives in [`docs/threat-model.md`](./docs/threat-model.md).
 
 ---
 
-## Deferred council gates
+## Planned reviews
 
-The following Gemini reviews are queued against Owen's personal AI Studio account (currently out of credit):
-
-- Phase 2 RLS second opinion
-- Phase 5 webhook × RLS diff review
-- Phase 7 whole-repo audit
-- Phase 8 final adversarial pre-push
-
-All four roll into one comprehensive Gemini pass before any public release. Until then, Codex gpt-5.4 has covered the adversarial surface — Phase 2 council-gate report documents 11 findings triaged and fixed.
+A second independent review of the database policies, the webhook handling and the whole repository is planned before the live adapters are wired. The Phase 2 review report in `docs/phase-2-council-gate.md` lists the 11 findings already fixed.

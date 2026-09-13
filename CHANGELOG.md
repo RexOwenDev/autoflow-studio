@@ -149,8 +149,8 @@ Codex adversarial council gate — 11 findings applied.
 - **LOW** Stripe IDs to all members: SELECT restricted to owner + `billing_subscription_member_view` (security_invoker)
 - **LOW** pgTAP NULL SQLSTATE: assertions now check exact 42501 / 23001
 
-### Gemini gate
-Deferred — both API keys (personal + DesignShopp) returned 429 on `ai.studio`. Rolls into Phase 7/8 final pass.
+### Second review
+Deferred: the second model review was rate limited and moves to a later phase.
 
 ---
 

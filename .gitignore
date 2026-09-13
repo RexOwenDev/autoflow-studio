@@ -56,3 +56,4 @@ src/types/supabase.ts
 
 # Fixture data output (seeded at runtime, not committed)
 scripts/output/
+*.tsbuildinfo

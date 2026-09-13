@@ -75,7 +75,7 @@ export default function PricingPage() {
           Transparent pricing
         </Badge>
         <h1 className="text-3xl md:text-4xl font-semibold tracking-tight">
-          Pricing that scales from side-project to SOC2 audit
+          Pricing that grows with your automations
         </h1>
         <p className="mt-4 text-sm md:text-base text-[var(--foreground-muted)] max-w-2xl mx-auto">
           No user-count fees. No feature upsells mid-billing-cycle. Just three tiers that match

@@ -89,12 +89,12 @@ export default async function AuditLogPage() {
         <div>
           <h1 className="text-sm font-semibold text-[var(--foreground)]">Audit log</h1>
           <p className="text-xs text-[var(--foreground-subtle)]">
-            {events.length} event{events.length === 1 ? "" : "s"} · SOC2-aligned append-only
+            {events.length} event{events.length === 1 ? "" : "s"} · Append only
           </p>
         </div>
         <Badge variant="success">
           <Shield className="w-3 h-3 mr-1" />
-          Tamper-evident
+          Tamper evident
         </Badge>
       </div>
 
